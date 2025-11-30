@@ -9,10 +9,7 @@ export default defineNuxtConfig({
   },
 
   // Modules
-  modules: [
-    '@vueuse/nuxt',
-    '@nuxtjs/i18n',
-  ],
+  modules: ['@vueuse/nuxt', '@nuxtjs/i18n','@nuxtjs/tailwindcss'],
 
   // CSS
   css: ['~/assets/styles/main.css'],
@@ -42,8 +39,7 @@ export default defineNuxtConfig({
   routeRules: {
     '/': { isr: 3600 }, // Incremental Static Regeneration
     '/admin/**': { ssr: false }, // SPA pour admin
-        '/api/**': { cors: true },
-
+    '/api/**': { cors: true },
   },
 
   // App config
