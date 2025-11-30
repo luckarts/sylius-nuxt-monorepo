@@ -1,0 +1,52 @@
+name: NuxtJS Build Check
+
+on:
+  push:
+    # Si vous voulez que le test s'exécute sur TOUTES les branches,
+    # vous pouvez simplement omettre la ligne 'branches' :
+    # push: {}
+    # Ou utiliser un wildcard pour toutes les branches :
+    branches:
+      - '**'
+jobs:
+  build:
+    runs-on: ubuntu-latest # Exécute le job sur la dernière version d'Ubuntu
+
+    steps:
+      - name: ⬇️ Checkout du code
+        uses: actions/checkout@v4 # Récupère le code de votre dépôt
+
+      - name: 🛠️ Setup Node.js
+        # Utiliser la version de Node.js recommandée pour votre projet Nuxt
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Exemple : utilisez 20, 18, ou celle spécifiée dans votre package.json
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10 # Version de pnpm à utiliser
+
+      - name: 📦 Installer les dépendances
+        # Installe les dépendances dans le dossier frontend
+        working-directory: frontend
+        run: pnpm install
+
+      # ⚠️ LINTING
+      - name: 🔍 Vérification du linting (ESLint/Biome)
+        working-directory: frontend
+        run: pnpm run lint
+      # ⚠️ FIN LINTING
+
+      - name: 🔍 Vérification TypeScript
+        # Vérifie les erreurs TypeScript avant la compilation
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: 🏗️ Exécuter la compilation Nuxt
+        # C'est l'étape cruciale. Elle échouera si :
+        # 1. La commande est incorrecte (vérifiez votre package.json).
+        # 2. Des fichiers ou configurations essentiels (comme le nuxt.config.js, des composants, ou des modules) sont manquants ou mal configurés.
+        working-directory: frontend
+        run: pnpm run build # Ou yarn build, pnpm build, selon votre commande de build Nuxt
+        # Assurez-vous que votre script "build" dans package.json est correct, par ex. "build": "nuxt build"

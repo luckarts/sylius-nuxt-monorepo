@@ -9,7 +9,7 @@ export default defineNuxtConfig({
   },
 
   // Modules
-  modules: ['@vueuse/nuxt', '@nuxtjs/i18n','@nuxtjs/tailwindcss'],
+  modules: ['@vueuse/nuxt', '@nuxtjs/i18n', '@nuxtjs/tailwindcss'],
 
   // CSS
   css: ['~/assets/styles/main.css'],
