@@ -8,6 +8,7 @@ import {
   useForwardPropsEmits,
 } from 'radix-vue'
 import type { HTMLAttributes } from 'vue'
+import Icon from '~/components/ui/Icon.vue'
 
 interface Props extends CheckboxRootProps {
   class?: HTMLAttributes['class']
@@ -31,17 +32,7 @@ const forwarded = useForwardPropsEmits(props, emits)
     "
   >
     <CheckboxIndicator class="flex h-full w-full items-center justify-center text-current">
-      <svg
-        class="h-4 w-4"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="3"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
+      <Icon name="check" class="h-4 w-4" />
     </CheckboxIndicator>
   </CheckboxRoot>
 </template>
