@@ -1,86 +1,61 @@
 <script setup lang="ts">
-import { Button, Checkbox, FormLabel, Inputfield } from '~/components/shadcn'
-import { email, min, required, useField } from '~/composables/useFieldValidation'
+import { email, min, required } from '~/composables/useFieldValidation'
+import type { FormField, FormValues } from '~/types/form'
 
-// Champs de formulaire
-const emailField = useField('', [required("L'email est requis"), email('Email invalide')])
+interface Props {
+  loading?: boolean
+}
 
-const passwordField = useField('', [
-  required('Le mot de passe est requis'),
-  min(8, 'Minimum 8 caractères'),
-])
+withDefaults(defineProps<Props>(), {
+  loading: false,
+})
 
-const rememberMe = ref(false)
+const emit = defineEmits<{
+  submit: [credentials: { email: string; password: string; rememberMe: boolean }]
+}>()
 
-const handleSubmit = () => {
-  // Valider tous les champs
-  const isValid = [emailField, passwordField].every((field) => field.validate())
+// Configuration des champs du formulaire
+const fields: FormField[] = [
+  {
+    name: 'email',
+    label: 'Adresse email *',
+    type: 'email',
+    placeholder: 'exemple@email.com',
+    autocomplete: 'email',
+    rules: [required("L'email est requis"), email('Email invalide')],
+  },
+  {
+    name: 'password',
+    label: 'Mot de passe *',
+    type: 'password',
+    placeholder: '••••••••',
+    autocomplete: 'current-password',
+    rules: [required('Le mot de passe est requis'), min(8, 'Minimum 8 caractères')],
+  },
+  {
+    name: 'rememberMe',
+    label: 'Se souvenir de moi',
+    type: 'checkbox',
+    checked: false,
+  },
+]
 
-  if (isValid) {
-    console.log('vamlid')
-  }
+const handleSubmit = (values: FormValues) => {
+  // Validation déjà effectuée par FormBuilder
+  // Émettre les données validées vers le parent
+  emit('submit', {
+    email: values.email as string,
+    password: values.password as string,
+    rememberMe: values.rememberMe as boolean,
+  })
 }
 </script>
 
 <template>
-  <form @submit.prevent="handleSubmit" novalidate class="space-y-6">
-    <!-- Email field -->
-    <div>
-      <FormLabel for="login-email" :error="!!emailField.error.value">
-        Adresse email *
-      </FormLabel>
-      <Inputfield
-        id="login-email"
-        name="email"
-        v-model="emailField.value.value"
-        type="email"
-        placeholder="exemple@email.com"
-        autocomplete="email"
-        :error="!!emailField.error.value"
-        @blur="emailField.touch()"
-      />
-      
-      <FormMessage :message="emailField.error.value" />
-    </div>
-
-    <!-- Password field -->
-    <div>
-      <FormLabel for="login-password" :error="!!passwordField.error.value">
-        Mot de passe *
-      </FormLabel>
-      <Inputfield
-        id="login-password"
-        name="password"
-        v-model="passwordField.value.value"
-        type="password"
-        placeholder="••••••••"
-        autocomplete="current-password"
-        :error="!!passwordField.error.value"
-        @blur="passwordField.touch()"
-      />
-      
-      <FormMessage :message="passwordField.error.value" />
-    </div>
-
-    <!-- Remember me checkbox -->
-    <div class="flex items-center space-x-2">
-      <Checkbox
-        id="rememberMe"
-        v-model:checked="rememberMe"
-      />
-       <FormLabel for="rememberMe">
-        Se souvenir de moi
-      </FormLabel>
-    </div>
-
-    <!-- Submit button -->
-    <Button
-      type="submit"
-      size="lg"
-      class="w-full"
-    >
-      <span>Se connecter</span>
-      
-    </Button>
-  </form>
+  <FormBuilder
+    :fields="fields"
+    :loading="loading"
+    submit-label="Se connecter"
+    @submit="handleSubmit"
+  />
 </template>
