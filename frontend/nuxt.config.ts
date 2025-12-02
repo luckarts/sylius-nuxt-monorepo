@@ -39,7 +39,10 @@ export default defineNuxtConfig({
   routeRules: {
     '/': { isr: 3600 }, // Incremental Static Regeneration
     '/admin/**': { ssr: false }, // SPA pour admin
-    '/api/**': { cors: true },
+    '/api/**': {
+      cors: true,
+      proxy: { to: `${process.env.SYLIUS_API_URL || 'http://localhost:8000'}/api/**` },
+    },
   },
 
   // App config
