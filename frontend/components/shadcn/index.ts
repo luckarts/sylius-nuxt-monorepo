@@ -1,6 +1,6 @@
 // Single-file components (root level)
 // Note: Préférer les imports directs depuis les fichiers .vue
-// Exemple: import Checkbox from '~/components/shadcn/Checkbox.vue'
+export { default as Toast } from '~/components/shadcn/toast/Toast.vue'
 
 // Re-export modules
 export * from './button'
