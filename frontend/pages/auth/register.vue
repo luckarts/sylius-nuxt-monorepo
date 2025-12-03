@@ -12,13 +12,11 @@ useSeoMeta({
 
 const { register } = useAuth()
 const loading = ref(false)
-const handleRegisterSubmit = async (credentials: RegisterData) => {
+
+const handleRegisterSubmit = async (data: RegisterData) => {
+  loading.value = true
   try {
-    await register(credentials)
-    loading.value = true
-    console.log('Account created successfully! Redirecting to dashboard...')
-  } catch (error) {
-    console.log(error || 'An error occurred during registration. Please try again.')
+    await register(data)
   } finally {
     loading.value = false
   }
