@@ -13,6 +13,7 @@ interface AuthResult {
 export function useAuth() {
   const authStore = useAuthStore()
   const { toast } = useToast()
+  const router = useRouter()
 
   /**
    * Connexion utilisateur
@@ -24,6 +25,8 @@ export function useAuth() {
 
       // Mise à jour du store
       authStore.setToken(response.token)
+
+      await router.push('/dashboard')
 
       // Toast de succès
       toast({
