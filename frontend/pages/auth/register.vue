@@ -12,11 +12,15 @@ useSeoMeta({
 
 const { register } = useAuth()
 const loading = ref(false)
+const registrationSuccess = ref(false)
+const registeredEmail = ref('')
 
-const handleRegisterSubmit = async (data: RegisterData) => {
+const handleRegisterSubmit = async (credentials: RegisterData) => {
   loading.value = true
   try {
-    await register(data)
+    await register(credentials)
+    registeredEmail.value = credentials.email
+    registrationSuccess.value = true
   } finally {
     loading.value = false
   }
@@ -40,6 +44,15 @@ const handleRegisterSubmit = async (data: RegisterData) => {
           <span class="text-sm">Back to Dashboard</span>
         </NuxtLink>
 
+         
+        <!-- Success Card (displayed after successful registration) -->
+        <RegistrationSuccessCard
+          v-if="registrationSuccess"
+          :user-email="registeredEmail"
+        />
+
+        <div v-else>
+       
         <!-- Header -->
         <div class="mb-10">
           <h1 class="text-4xl font-bold text-gray-900 mb-2">
@@ -69,6 +82,7 @@ const handleRegisterSubmit = async (data: RegisterData) => {
           </NuxtLink>
         </p>
 
+         </div>
         <!-- Footer -->
         <div class="mt-12 text-center text-sm text-gray-500">
           <p>©2025 Sylius. All Rights Reserved.</p>
