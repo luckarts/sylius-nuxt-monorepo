@@ -6,14 +6,23 @@ interface AuthState {
 
 /**
  * Store d'authentification - État global uniquement
- * La logique métier est dans le composable useAuth()
  */
 export const useAuthStore = defineStore('auth', {
-  state: (): AuthState => ({
-    token: null,
-  }),
+  state: (): AuthState => {
+    // 🔄 Hydratation : Restaurer le token depuis le cookie au démarrage
+    const tokenCookie = useCookie<string | null>('auth_token')
 
-  getters: {},
+    return {
+      token: tokenCookie.value || null,
+    }
+  },
+
+  getters: {
+    /**
+     * Vérifie si l'utilisateur est authentifié
+     */
+    isAuthenticated: (state): boolean => !!state.token,
+  },
 
   actions: {
     /**
@@ -29,6 +38,17 @@ export const useAuthStore = defineStore('auth', {
         sameSite: 'strict',
       })
       tokenCookie.value = token
+    },
+
+    /**
+     * Efface l'authentification (token et cookie)
+     */
+    clearAuth() {
+      this.token = null
+
+      // Supprimer le cookie
+      const tokenCookie = useCookie('auth_token')
+      tokenCookie.value = null
     },
   },
 })
