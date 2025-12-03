@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { LoginCredentials } from '~/types/auth'
+
 definePageMeta({
   layout: 'default',
 })
@@ -8,12 +10,18 @@ useSeoMeta({
   description: 'Connectez-vous à votre compte Sylius',
 })
 
-const handleLoginSubmit = async (credentials: {
-  email: string
-  password: string
-  rememberMe: boolean
-}) => {
-  console.log(credentials)
+const { login } = useAuth()
+const loading = ref(false)
+const handleLoginSubmit = async (credentials: LoginCredentials) => {
+  loading.value = true
+  try {
+    await login(credentials)
+    console.log('Login success')
+  } catch (error) {
+    console.log(error || 'An error occurred during login. Please try again.')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -45,6 +53,7 @@ const handleLoginSubmit = async (credentials: {
         </div>
 
         <LoginForm
+          :loading="loading"
           @submit="handleLoginSubmit"
         />
 
