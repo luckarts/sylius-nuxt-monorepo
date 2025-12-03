@@ -1,0 +1,178 @@
+version: '3.8'
+
+services:
+  # Mailpit - Serveur SMTP de test pour intercepter les emails
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit-e2e
+    restart: unless-stopped
+    ports:
+      - "8025:8025"  # Web UI (SMTP 1025 reste interne au réseau Docker)
+    networks:
+      - sylius-e2e-network
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      TZ: Europe/Paris
+    volumes:
+      - mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Base de données PostgreSQL pour Sylius
+  postgres:
+    image: postgres:15-alpine
+    container_name: sylius-postgres-e2e
+    environment:
+      POSTGRES_DB: sylius_e2e
+      POSTGRES_USER: sylius
+      POSTGRES_PASSWORD: sylius_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_e2e_data:/var/lib/postgresql/data
+    networks:
+      - sylius-e2e-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sylius"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Sylius PHP-FPM
+  php:
+    build:
+      context: ./AcmeStore
+      dockerfile: Dockerfile
+      args:
+        APP_ENV: test
+    container_name: sylius-php-e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      APP_ENV: test
+      APP_DEBUG: 1
+      APP_SECRET: test-secret-key-for-e2e
+      DATABASE_URL: "postgresql://sylius:sylius_password@postgres:5432/sylius_e2e?serverVersion=15&charset=utf8"
+      JWT_SECRET_KEY: "%kernel.project_dir%/config/jwt/private.pem"
+      JWT_PUBLIC_KEY: "%kernel.project_dir%/config/jwt/public.pem"
+      JWT_PASSPHRASE: "e2e-test-passphrase"
+      MAILER_DSN: "smtp://mailpit:1025"
+      MESSENGER_TRANSPORT_DSN: "doctrine://default"
+      CORS_ALLOW_ORIGIN: "^http://localhost:3000$$"
+    volumes:
+      - ./AcmeStore:/srv/sylius
+      - sylius_var:/srv/sylius/var
+      - sylius_vendor:/srv/sylius/vendor
+    networks:
+      - sylius-e2e-network
+
+  # Nginx pour servir Sylius
+  sylius:
+    image: ghcr.io/sylius/sylius-nginx:latest
+    container_name: sylius-nginx-e2e
+    depends_on:
+      - php
+    ports:
+      - "8000:80"
+    volumes:
+      - ./AcmeStore:/srv/sylius:ro
+    networks:
+      - sylius-e2e-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/api/v2/shop/products || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Reverse Proxy Nginx (pour forcer Host: localhost)
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy-e2e
+    depends_on:
+      - sylius
+      - "9000:80"
+    volumes:
+      - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - sylius-e2e-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/v2/shop/products"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Frontend Nuxt 3
+  nuxt:
+    build:
+      context: ./Nuxt_Sylius
+      dockerfile: Dockerfile.e2e
+    container_name: nuxt-frontend-e2e
+    depends_on:
+      - nginx-proxy
+    environment:
+      NUXT_PUBLIC_API_BASE: "http://nginx-proxy"
+      SYLIUS_CHANNEL_CODE: "WEB"
+      NUXT_API_SECRET: "test-secret"
+      AUTH_SECRET: "test-auth-secret"
+      NODE_ENV: "test"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./Nuxt_Sylius:/app
+      - nuxt_node_modules:/app/node_modules
+      - nuxt_output:/app/.output
+    networks:
+      - sylius-e2e-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Cypress (pour lancer les tests)
+  cypress:
+    image: cypress/included:15.7.0
+    container_name: cypress-e2e
+    depends_on:
+      nuxt:
+        condition: service_healthy
+    environment:
+      CYPRESS_baseUrl: "http://nuxt:3000"
+      CYPRESS_apiUrl: "http://sylius/api/v2"
+    volumes:
+      - ./Nuxt_Sylius:/e2e
+    working_dir: /e2e
+    networks:
+      - sylius-e2e-network
+    entrypoint: cypress run
+    profiles:
+      - test
+
+volumes:
+  mailpit_data:
+    driver: local
+  postgres_e2e_data:
+    driver: local
+  sylius_var:
+    driver: local
+  sylius_vendor:
+    driver: local
+  nuxt_node_modules:
+    driver: local
+  nuxt_output:
+    driver: local
+
+networks:
+  sylius-e2e-network:
+    driver: bridge
