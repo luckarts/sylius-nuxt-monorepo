@@ -12,13 +12,11 @@ useSeoMeta({
 
 const { login } = useAuth()
 const loading = ref(false)
+
 const handleLoginSubmit = async (credentials: LoginCredentials) => {
   loading.value = true
   try {
     await login(credentials)
-    console.log('Login success')
-  } catch (error) {
-    console.log(error || 'An error occurred during login. Please try again.')
   } finally {
     loading.value = false
   }

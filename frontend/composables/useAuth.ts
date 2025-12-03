@@ -1,3 +1,4 @@
+import { loginService, registerService } from '~/api/auth'
 import type { LoginCredentials, RegisterData } from '~/types/auth'
 
 interface AuthResult {
@@ -6,15 +7,23 @@ interface AuthResult {
 }
 
 /**
- * Gère toute la logique métier d'authentification
+ * Composable d'authentification - Gère toute la logique métier
+ * Utilise les services API et met à jour le store
  */
 export function useAuth() {
   const authStore = useAuthStore()
   const { toast } = useToast()
 
+  /**
+   * Connexion utilisateur
+   */
   async function login(credentials: LoginCredentials): Promise<AuthResult> {
     try {
-      await authStore.login(credentials)
+      // Appel au service API
+      const response = await loginService(credentials)
+
+      // Mise à jour du store
+      authStore.setToken(response.token)
 
       // Toast de succès
       toast({
@@ -25,11 +34,20 @@ export function useAuth() {
 
       return { success: true }
     } catch (error: unknown) {
-      const err = error as { data?: { message?: string }; message?: string }
+      const err = error as { data?: { message?: string }; message?: string; statusCode?: number }
+
+      // Gestion des erreurs métier
+      let errorMessage = 'Erreur de connexion'
+
+      if (err.statusCode === 401) {
+        errorMessage = 'Identifiants invalides'
+      } else if (err.statusCode === 429) {
+        errorMessage = 'Trop de tentatives, réessayez plus tard'
+      } else {
+        errorMessage = err.data?.message || err.message || errorMessage
+      }
 
       // Toast d'erreur
-      const errorMessage = err.data?.message || err.message || 'Erreur de connexion'
-
       toast({
         title: 'Erreur de connexion',
         description: errorMessage,
@@ -43,9 +61,13 @@ export function useAuth() {
     }
   }
 
+  /**
+   * Inscription utilisateur
+   */
   async function register(data: RegisterData): Promise<AuthResult> {
     try {
-      await authStore.register(data)
+      // Appel au service API
+      await registerService(data)
 
       // Toast de succès
       toast({
@@ -57,11 +79,18 @@ export function useAuth() {
 
       return { success: true }
     } catch (error: unknown) {
-      const err = error as { data?: { message?: string }; message?: string }
+      const err = error as { data?: { message?: string }; message?: string; statusCode?: number }
+
+      // Gestion des erreurs métier
+      let errorMessage = "Erreur lors de l'inscription"
+
+      if (err.statusCode === 422) {
+        errorMessage = 'Email déjà utilisé ou données invalides'
+      } else {
+        errorMessage = err.data?.message || err.message || errorMessage
+      }
 
       // Toast d'erreur
-      const errorMessage = err.data?.message || err.message || "Erreur lors de l'inscription"
-
       toast({
         title: "Erreur d'inscription",
         description: errorMessage,
@@ -75,11 +104,12 @@ export function useAuth() {
     }
   }
 
-  const error = computed(() => authStore.error)
+  const token = computed(() => authStore.token)
 
   return {
+    // Actions
     login,
     register,
-    error,
+    token,
   }
 }
