@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { RegisterData } from '~/types/auth'
+
 definePageMeta({
   layout: 'default',
 })
@@ -8,15 +10,18 @@ useSeoMeta({
   description: 'Créez votre compte Sylius',
 })
 
-const handleRegisterSubmit = async (data: {
-  email: string
-  password: string
-  firstName: string
-  lastName: string
-  phoneNumber: string
-  subscribedToNewsletter: boolean
-}) => {
-  console.log(data)
+const { register } = useAuth()
+const loading = ref(false)
+const handleRegisterSubmit = async (credentials: RegisterData) => {
+  try {
+    await register(credentials)
+    loading.value = true
+    console.log('Account created successfully! Redirecting to dashboard...')
+  } catch (error) {
+    console.log(error || 'An error occurred during registration. Please try again.')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -52,6 +57,7 @@ const handleRegisterSubmit = async (data: {
         <!-- Register Form Component -->
         <RegisterForm
           @submit="handleRegisterSubmit"
+          :loading="loading"
         />
 
         <!-- Login Link -->
