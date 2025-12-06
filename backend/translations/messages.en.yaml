@@ -1,0 +1,22 @@
+app:
+    homepage:
+        hero:
+            title: "Welcome to our store"
+            subtitle: "Discover our exceptional quality products"
+            cta_button: "View our products"
+        promo:
+            title: "Current promotions"
+            description: "Take advantage of our exceptional offers on a selection of products"
+        about:
+            title: "Why choose us?"
+            quality_title: "Premium Quality"
+            quality_description: "Carefully selected products for their excellence"
+            delivery_title: "Fast delivery"
+            delivery_description: "Shipping within 24h throughout France"
+            support_title: "Customer service"
+            support_description: "A dedicated team at your service 7/7"
+        newsletter:
+            title: "Stay informed"
+            description: "Subscribe to our newsletter to receive our exclusive offers"
+            placeholder: "Your email address"
+            submit: "Subscribe"

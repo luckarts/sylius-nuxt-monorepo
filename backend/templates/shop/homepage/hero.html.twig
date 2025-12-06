@@ -1,0 +1,12 @@
+{# Template pour le bloc hero de la homepage #}
+{# Ce template peut être utilisé comme référence pour créer le bloc CMS 'homepage_hero' #}
+
+<section class="cms-hero-section">
+    <div class="container">
+        <h1>{{ 'app.homepage.hero.title'|trans }}</h1>
+        <p class="lead">{{ 'app.homepage.hero.subtitle'|trans }}</p>
+        <a href="{{ path('sylius_shop_product_index') }}" class="btn btn-hero btn-lg">
+            {{ 'app.homepage.hero.cta_button'|trans }}
+        </a>
+    </div>
+</section>

@@ -1,0 +1,27 @@
+{% set homepage_hook = 'sylius_shop.homepage.index' %}
+{% set prefixes = [homepage_hook] %}
+
+{% extends '@SyliusShop/shared/layout/base.html.twig' %}
+
+{% block content %}
+    <div class="homepage-container">
+        {#
+            Section 1 : Bannière Hero gérée par le CMS
+            À créer dans l'admin : Block CMS avec le code 'homepage_hero'
+        #}
+        {{ sylius_cms_render_block('homepage_hero') }}
+
+        {#
+            Section 2 : Affichage de toutes les sections Sylius
+            (latest_deals, new_collection, latest_products)
+            Configuration dans config/packages/sylius_twig_hooks.yaml
+        #}
+        {% hook homepage_hook %}
+
+        {#
+            Section 3 : Bloc CMS pour le pied de page / À propos
+            À créer dans l'admin : Block CMS avec le code 'homepage_about'
+        #}
+        {{ sylius_cms_render_block('homepage_about') }}
+    </div>
+{% endblock %}

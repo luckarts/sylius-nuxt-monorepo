@@ -1,0 +1,10 @@
+// Import Bootstrap and Sylius default styles first
+// (These will be loaded from the parent theme)
+
+// Import custom variables
+@import 'variables';
+
+// Import custom homepage styles
+@import 'homepage';
+
+// Additional custom styles can be added here
