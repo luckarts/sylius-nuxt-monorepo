@@ -89,6 +89,8 @@ export function useAuth() {
 
       if (err.statusCode === 422) {
         errorMessage = 'Email déjà utilisé ou données invalides'
+      } else if (err.statusCode === 500) {
+        errorMessage = 'Erreur serveur. Veuillez réessayer plus tard'
       } else {
         errorMessage = err.data?.message || err.message || errorMessage
       }
