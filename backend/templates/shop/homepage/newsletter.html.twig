@@ -1,0 +1,26 @@
+{# Newsletter subscription section #}
+
+<section class="newsletter-section py-5 bg-light">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 text-center">
+                <h2 class="mb-3">{{ 'app.homepage.newsletter.title'|trans }}</h2>
+                <p class="lead mb-4">{{ 'app.homepage.newsletter.description'|trans }}</p>
+
+                <form class="newsletter-form d-flex gap-2 justify-content-center" method="post" action="{{ path('sylius_shop_contact_request') }}">
+                    <input
+                        type="email"
+                        name="email"
+                        class="form-control form-control-lg"
+                        placeholder="{{ 'app.homepage.newsletter.placeholder'|trans }}"
+                        required
+                        style="max-width: 400px;"
+                    >
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        {{ 'app.homepage.newsletter.submit'|trans }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>

@@ -1,0 +1,4 @@
+framework:
+    router:
+        strict_requirements: true
+        default_uri: '%env(default::ROUTER_DEFAULT_URI)%'

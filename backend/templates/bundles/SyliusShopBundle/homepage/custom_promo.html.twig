@@ -1,0 +1,60 @@
+{% set prefixes = ['sylius_shop.homepage'] %}
+
+<section class="custom-promo">
+    <div class="container">
+        <h2>{{ 'app.homepage.promo.title'|trans }}</h2>
+        <p>{{ 'app.homepage.promo.description'|trans }}</p>
+
+        <div class="promo-stats mt-4">
+            <div class="row justify-content-center">
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <h3 class="stat-number">10K+</h3>
+                        <p class="stat-label">Clients satisfaits</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <h3 class="stat-number">500+</h3>
+                        <p class="stat-label">Produits</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <h3 class="stat-number">24h</h3>
+                        <p class="stat-label">Livraison</p>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6 mb-3">
+                    <div class="stat-item">
+                        <h3 class="stat-number">7j/7</h3>
+                        <p class="stat-label">Service client</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+    .promo-stats {
+        margin-top: 2rem;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: white;
+    }
+
+    .stat-label {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin: 0;
+    }
+</style>
