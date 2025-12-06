@@ -1,0 +1,40 @@
+sylius_twig_hooks:
+    hooks:
+        'sylius_shop.homepage.index':
+            # Configuration des hooks de la homepage
+
+            # Désactiver la bannière par défaut de Sylius
+            banner:
+                enabled: false
+
+            # Modifier les dernières offres : afficher 8 produits
+            latest_deals:
+                component: 'sylius_shop:product:list'
+                props:
+                    limit: 8
+                    template: '@SyliusShop/product/common/list.html.twig'
+                configuration:
+                    title: 'sylius.homepage.latest_deals'
+                    test_attribute: 'latest-deals'
+                priority: 300
+
+            # Section promo personnalisée (entre latest_deals et new_collection)
+            custom_promo:
+                template: '@SyliusShop/homepage/custom_promo.html.twig'
+                priority: 250
+
+            # Nouvelle collection
+            new_collection:
+                template: '@SyliusShop/homepage/new_collection.html.twig'
+                priority: 200
+
+            # Derniers produits : afficher 12 produits
+            latest_products:
+                component: 'sylius_shop:product:list'
+                props:
+                    limit: 12
+                    template: '@SyliusShop/product/common/list.html.twig'
+                configuration:
+                    title: 'sylius.homepage.latest_products'
+                    test_attribute: 'latest-products'
+                priority: 100

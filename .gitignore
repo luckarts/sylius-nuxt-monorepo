@@ -1,0 +1,107 @@
+# Playwright & E2E test outputs
+
+
+# Frontend (Nuxt)
+frontend/node_modules/
+frontend/.nuxt/
+frontend/.output/
+frontend/.env
+
+# Backend (Sylius)
+backend/vendor/
+backend/var/
+backend/.env.local
+backend/.env.*.local
+backend/.env
+# Docker
+.docker/data/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+git restore --staged
+backend/public/assets
+backend/public/build
+backend/public/css
+backend/public/js
+backend/public/media
+!backend/public/media/image/.gitkeep
+
+backend/etc/build/*
+!/etc/build/.gitignore
+
+backend/drivers/
+
+backend/docker-compose.override.yaml
+backend/docker-compose.override.yml
+backend/compose.override.yaml
+backend/compose.override.yml
+backend/docker/mysql/data/
+
+###> symfony/framework-bundle ###
+backend/.env
+backend/.env.*.local
+backend/.env.local
+backend/.env.local.php
+backend/public/bundles
+backend/var/
+backend/vendor/
+###< symfony/framework-bundle ###
+
+###> friendsofphp/php-cs-fixer ###
+backend/.php_cs
+backend/.php_cs.cache
+###< friendsofphp/php-cs-fixer ###
+
+###> phpunit/phpunit ###
+backend/.phpunit.result.cache
+backend/phpunit.xml
+###< phpunit/phpunit ###
+
+###> lexik/jwt-authentication-bundle ###
+backend/config/jwt/*.pem
+!backend/config/jwt/*-test.pem
+###< lexik/jwt-authentication-bundle ###
+
+###> symfony/encryption ###
+backend/config/encryption/*.key
+!backend/config/encryption/test.key
+###< symfony/encryption ###
+
+###> symfony/webpack-encore-bundle ###
+backend/node_modules/
+backend/public/build/
+backend/npm-debug.log
+backend/yarn-error.log
+###< symfony/webpack-encore-bundle ###
+
+###> phpstan/phpstan ###
+backend/phpstan.neon
+###< phpstan/phpstan ###
+
+###> friends-of-behat/symfony-extension ###
+backend/behat.yml
+###< friends-of-behat/symfony-extension ###
+
+###> liip/imagine-bundle ###
+backend/public/media/cache/
+###< liip/imagine-bundle ###
+
+# Docker volumes
+.docker-data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+

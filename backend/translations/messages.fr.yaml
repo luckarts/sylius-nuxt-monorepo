@@ -1,0 +1,22 @@
+app:
+    homepage:
+        hero:
+            title: "Bienvenue dans notre boutique"
+            subtitle: "Découvrez nos produits de qualité exceptionnelle"
+            cta_button: "Voir nos produits"
+        promo:
+            title: "Nos promotions du moment"
+            description: "Profitez de nos offres exceptionnelles sur une sélection de produits"
+        about:
+            title: "Pourquoi nous choisir ?"
+            quality_title: "Qualité Premium"
+            quality_description: "Des produits soigneusement sélectionnés pour leur excellence"
+            delivery_title: "Livraison rapide"
+            delivery_description: "Expédition sous 24h partout en France"
+            support_title: "Service client"
+            support_description: "Une équipe dédiée à votre écoute 7j/7"
+        newsletter:
+            title: "Restez informé"
+            description: "Inscrivez-vous à notre newsletter pour recevoir nos offres exclusives"
+            placeholder: "Votre adresse email"
+            submit: "S'inscrire"
