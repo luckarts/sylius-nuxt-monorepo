@@ -39,7 +39,7 @@ services:
     networks:
       - sylius-e2e-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sylius"]
+      test: ["CMD-SHELL", "pg_isready -U sylius -d sylius_e2e"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,7 +47,7 @@ services:
   # Backend Sylius PHP-FPM
   php:
     build:
-      context: ./AcmeStore
+      context: ./backend
       dockerfile: Dockerfile
       args:
         APP_ENV: test
@@ -68,8 +68,11 @@ services:
       MAILER_DSN: "smtp://mailpit:1025"
       MESSENGER_TRANSPORT_DSN: "doctrine://default"
       CORS_ALLOW_ORIGIN: "^http://localhost:3000$$"
+      ROUTER_DEFAULT_URI: "http://localhost:8000"  # URL publique pour les emails (avec port)
+      SYLIUS_FIXTURES_HOSTNAME: "localhost"  # Hostname du channel pour les API calls (sans port)
+      TRUSTED_HOSTS: "^(localhost|sylius|127\\.0\\.0\\.1)$"  # Accepter localhost, sylius et 127.0.0.1
     volumes:
-      - ./AcmeStore:/srv/sylius
+      - ./backend:/srv/sylius
       - sylius_var:/srv/sylius/var
       - sylius_vendor:/srv/sylius/vendor
     networks:
@@ -84,15 +87,15 @@ services:
     ports:
       - "8000:80"
     volumes:
-      - ./AcmeStore:/srv/sylius:ro
+      - ./backend:/srv/sylius:ro
     networks:
       - sylius-e2e-network
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost/api/v2/shop/products || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 240s  # 4 minutes to allow PHP-FPM to fully load fixtures
 
   # Reverse Proxy Nginx (pour forcer Host: localhost)
   nginx-proxy:
@@ -100,27 +103,31 @@ services:
     container_name: nginx-proxy-e2e
     depends_on:
       - sylius
+    ports:
       - "9000:80"
     volumes:
       - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - sylius-e2e-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/v2/shop/products"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/health"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 10s
 
   # Frontend Nuxt 3
   nuxt:
     build:
-      context: ./Nuxt_Sylius
+      context: ./frontend
       dockerfile: Dockerfile.e2e
     container_name: nuxt-frontend-e2e
+    user: "1000:1000"  # Utilise l'UID/GID de l'utilisateur local
     depends_on:
       - nginx-proxy
     environment:
       NUXT_PUBLIC_API_BASE: "http://nginx-proxy"
+      SYLIUS_API_URL: "http://nginx-proxy"  # Pour le proxy API côté serveur
       SYLIUS_CHANNEL_CODE: "WEB"
       NUXT_API_SECRET: "test-secret"
       AUTH_SECRET: "test-auth-secret"
@@ -128,36 +135,141 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./Nuxt_Sylius:/app
+      - ./frontend:/app
       - nuxt_node_modules:/app/node_modules
+      - nuxt_nuxt:/app/.nuxt  # Volume pour .nuxt pour éviter les conflits
       - nuxt_output:/app/.output
     networks:
       - sylius-e2e-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-
-  # Cypress (pour lancer les tests)
-  cypress:
-    image: cypress/included:15.7.0
-    container_name: cypress-e2e
+  # Playwright (pour lancer les tests - tous les navigateurs)
+  # Note: Using 'latest' because specific version tags may not be available immediately on Docker Hub
+  playwright:
+    image: mcr.microsoft.com/playwright:latest
+    container_name: playwright-e2e
     depends_on:
       nuxt:
         condition: service_healthy
+      mailpit:
+        condition: service_healthy
     environment:
-      CYPRESS_baseUrl: "http://nuxt:3000"
-      CYPRESS_apiUrl: "http://sylius/api/v2"
+      BASE_URL: "http://nuxt:3000"
+      MAILPIT_URL: "http://mailpit:8025"
+      CI: "true"
     volumes:
-      - ./Nuxt_Sylius:/e2e
-    working_dir: /e2e
+      - ./frontend:/app
+      - playwright_node_modules:/app/node_modules
+    working_dir: /app
     networks:
       - sylius-e2e-network
-    entrypoint: cypress run
+    command: >
+      sh -c "
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache &&
+        pnpm install --force &&
+        pnpm exec playwright install --with-deps &&
+        pnpm exec playwright test
+      "
     profiles:
       - test
+
+  # Playwright - Chromium uniquement
+  playwright-chrome:
+    image: mcr.microsoft.com/playwright:latest
+    container_name: playwright-chrome-e2e
+    depends_on:
+      nuxt:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      BASE_URL: "http://nuxt:3000"
+      MAILPIT_URL: "http://mailpit:8025"
+      CI: "true"
+    volumes:
+      - ./frontend:/app
+      - playwright_node_modules:/app/node_modules
+    working_dir: /app
+    networks:
+      - sylius-e2e-network
+    command: >
+      sh -c "
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache &&
+        pnpm install --force &&
+        pnpm exec playwright install --with-deps chromium &&
+        pnpm exec playwright test --project=chromium
+      "
+    profiles:
+      - test-chrome
+
+  # Playwright - Firefox uniquement
+  playwright-firefox:
+    image: mcr.microsoft.com/playwright:latest
+    container_name: playwright-firefox-e2e
+    depends_on:
+      nuxt:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      BASE_URL: "http://nuxt:3000"
+      MAILPIT_URL: "http://mailpit:8025"
+      CI: "true"
+      POSTGRES_DB: "sylius_e2e"
+      POSTGRES_USER: "sylius"
+      POSTGRES_PASSWORD: "sylius_password"
+    volumes:
+      - ./frontend:/app
+      - playwright_node_modules:/app/node_modules
+    working_dir: /app
+    networks:
+      - sylius-e2e-network
+    command: >
+      sh -c "
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache &&
+        pnpm install --force &&
+        pnpm exec playwright install --with-deps firefox &&
+        pnpm exec playwright test --project=firefox
+      "
+    profiles:
+      - test-firefox
+
+  # Playwright - WebKit uniquement
+  playwright-webkit:
+    image: mcr.microsoft.com/playwright:latest
+    container_name: playwright-webkit-e2e
+    depends_on:
+      nuxt:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      BASE_URL: "http://nuxt:3000"
+      MAILPIT_URL: "http://mailpit:8025"
+      CI: "true"
+    volumes:
+      - ./frontend:/app
+      - playwright_node_modules:/app/node_modules
+    working_dir: /app
+    networks:
+      - sylius-e2e-network
+    command: >
+      sh -c "
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache &&
+        pnpm install --force &&
+        pnpm exec playwright install --with-deps webkit &&
+        pnpm exec playwright test --project=webkit
+      "
+    profiles:
+      - test-webkit
 
 volumes:
   mailpit_data:
@@ -170,7 +282,11 @@ volumes:
     driver: local
   nuxt_node_modules:
     driver: local
+  nuxt_nuxt:
+    driver: local
   nuxt_output:
+    driver: local
+  playwright_node_modules:
     driver: local
 
 networks:

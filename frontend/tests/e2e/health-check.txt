@@ -1,0 +1,106 @@
+import { test, expect } from '@playwright/test';
+
+/**
+ * Health check test for Sylius application
+ * Verifies that Sylius is ready by checking the login page accessibility
+ */
+
+// Use nginx-proxy which sets the correct Host header for Sylius (instead of sylius hostname)
+const SYLIUS_URL = 'http://nginx-proxy/fr_FR/login';
+
+test.describe('Sylius Health Check', () => {
+  test('should access Sylius login page with HTTP 200', async ({ page }) => {
+    // Navigate to the Sylius login page
+    const response = await page.goto(SYLIUS_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    // Verify HTTP 200 status
+    expect(response?.status()).toBe(200);
+
+    console.log('✅ Sylius is ready (HTTP 200)');
+    console.log('✅ All containers are ready!');
+  });
+
+  test('should display login form elements', async ({ page }) => {
+    // Navigate to login page
+    await page.goto(SYLIUS_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    // Verify common login form elements are present
+    // Adjust selectors based on actual Sylius login page structure
+    await expect(page).toHaveTitle(/login|connexion/i);
+
+    // Check for form elements (adjust selectors as needed)
+    const hasEmailInput = await page.locator('input[type="email"], input[name*="email"], input[name="_username"]').count() > 0;
+    const hasPasswordInput = await page.locator('input[type="password"]').count() > 0;
+    const hasSubmitButton = await page.locator('button[type="submit"], input[type="submit"]').count() > 0;
+
+    expect(hasEmailInput).toBeTruthy();
+    expect(hasPasswordInput).toBeTruthy();
+    expect(hasSubmitButton).toBeTruthy();
+
+    console.log('✅ Login form elements are present');
+  });
+
+  test('should load page resources successfully', async ({ page }) => {
+    const failedResources: string[] = [];
+
+    // Listen for failed requests
+    page.on('requestfailed', request => {
+      failedResources.push(`${request.url()} - ${request.failure()?.errorText}`);
+    });
+
+    // Navigate to login page
+    await page.goto(SYLIUS_URL, {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
+
+    // Verify no critical resources failed
+    if (failedResources.length > 0) {
+      console.warn('⚠️ Some resources failed to load:', failedResources);
+    }
+
+    // We allow some non-critical resources to fail
+    expect(failedResources.length).toBeLessThan(5);
+
+    console.log('✅ Page resources loaded successfully');
+  });
+});
+
+test.describe('Sylius Readiness - Comprehensive Check', () => {
+  test('comprehensive health check', async ({ page }) => {
+    console.log('🔍 Starting comprehensive Sylius health check...');
+    console.log(`Target URL: ${SYLIUS_URL}`);
+
+    // Step 1: Check HTTP status
+    const response = await page.goto(SYLIUS_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    expect(response?.status()).toBe(200);
+    console.log('✅ HTTP 200 - Server is responding');
+
+    // Step 2: Check page title
+    await expect(page).toHaveTitle(/./);
+    console.log('✅ Page title is present');
+
+    // Step 3: Wait for body to be visible
+    await expect(page.locator('body')).toBeVisible();
+    console.log('✅ Page body is visible');
+
+    // Step 4: Check for login form
+    const hasForm = await page.locator('form').count() > 0;
+    expect(hasForm).toBeTruthy();
+    console.log('✅ Login form is present');
+
+    console.log('');
+    console.log('🎉 All checks passed! Sylius is ready.');
+    console.log('✅ All containers are ready!');
+  });
+});

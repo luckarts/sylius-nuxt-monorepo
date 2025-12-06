@@ -45,7 +45,12 @@ const handleDismiss = () => {
 </script>
 
 <template>
-  <div :class="classes">
+  <div
+    :class="classes"
+    role="alert"
+    aria-live="assertive"
+    aria-atomic="true"
+  >
     <div class="grid gap-1 flex-1">
       <div v-if="toast.title" class="text-sm font-semibold">
         {{ toast.title }}

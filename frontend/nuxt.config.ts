@@ -19,6 +19,7 @@ export default defineNuxtConfig({
     {
       path: '~/components',
       pathPrefix: false, // Ne pas ajouter le chemin comme prefix au nom
+      ignore: ['**/shadcn/**'], // Exclure shadcn pour forcer les imports explicites
     },
   ],
 
@@ -40,7 +41,6 @@ export default defineNuxtConfig({
     '/': { isr: 3600 }, // Incremental Static Regeneration
     '/admin/**': { ssr: false }, // SPA pour admin
     '/api/**': {
-      cors: true,
       proxy: { to: `${process.env.SYLIUS_API_URL || 'http://localhost:8000'}/api/**` },
     },
   },

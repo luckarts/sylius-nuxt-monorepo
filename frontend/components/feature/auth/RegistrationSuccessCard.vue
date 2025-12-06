@@ -1,12 +1,6 @@
 <script setup lang="ts">
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '~/components/shadcn'
+import { Button } from '~/components/shadcn/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/shadcn/card'
 
 interface Props {
   userEmail: string
