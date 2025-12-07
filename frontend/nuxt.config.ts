@@ -19,6 +19,7 @@ export default defineNuxtConfig({
     {
       path: '~/components',
       pathPrefix: false, // Ne pas ajouter le chemin comme prefix au nom
+      ignore: ['**/shadcn/**'], // Exclure shadcn pour forcer les imports explicites
     },
   ],
 
