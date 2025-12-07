@@ -7,7 +7,17 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["node_modules", ".nuxt", ".output", "dist", ".cache"]
+    "ignore": [
+      "node_modules",
+      ".nuxt",
+      ".output",
+      "dist",
+      ".cache",
+      ".pnpm-store",
+      "test-results",
+      "playwright-report",
+      "blob-report"
+    ]
   },
   "formatter": {
     "enabled": true,
