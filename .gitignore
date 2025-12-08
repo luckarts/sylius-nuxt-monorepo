@@ -1,4 +1,5 @@
 # Playwright & E2E test outputs
+<<<<<<< Updated upstream
 
 
 # Frontend (Nuxt)
@@ -94,6 +95,17 @@ backend/behat.yml
 ###> liip/imagine-bundle ###
 backend/public/media/cache/
 ###< liip/imagine-bundle ###
+=======
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Cypress (if used)
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+>>>>>>> Stashed changes
 
 # Docker volumes
 .docker-data/
