@@ -38,7 +38,7 @@ services:
       - sylius-e2e-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sylius -d sylius_e2e && psql -U sylius -d sylius_e2e -c 'SELECT 1' || exit 1"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
@@ -47,7 +47,7 @@ services:
   php:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.e2e  # Utilise le Dockerfile optimisé pour E2E
       args:
         APP_ENV: test
     container_name: sylius-php-e2e
@@ -67,9 +67,11 @@ services:
       MAILER_DSN: "smtp://mailpit:1025"
       MESSENGER_TRANSPORT_DSN: "doctrine://default"
       CORS_ALLOW_ORIGIN: "^http://localhost:3000$$"
-      ROUTER_DEFAULT_URI: "http://localhost:8000"  # URL publique pour les emails (avec port)
+      # ROUTER_DEFAULT_URI doit pointer vers nginx-proxy pour que les containers Docker puissent communiquer
+      # Sur CI/GitHub Actions, les containers ne peuvent pas accéder à "localhost"
+      ROUTER_DEFAULT_URI: "http://nginx-proxy"  # ✅ Utiliser nginx-proxy pour les redirections internes
       SYLIUS_FIXTURES_HOSTNAME: "localhost"  # Hostname du channel pour les API calls (sans port)
-      TRUSTED_HOSTS: "^(localhost|sylius|127\\.0\\.0\\.1)$"  # Accepter localhost, sylius et 127.0.0.1
+      TRUSTED_HOSTS: "^(localhost|sylius|nginx-proxy|127\\.0\\.0\\.1)$"  # ✅ Ajouter nginx-proxy aux hosts de confiance
     volumes:
       - ./backend:/srv/sylius
       - sylius_var:/srv/sylius/var
@@ -121,7 +123,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.e2e
     container_name: nuxt-frontend-e2e
-    # user: "1000:1000"  # Commenté car cause des problèmes de permissions avec les volumes nommés
+    # Note: user: "1000:1000" retiré pour compatibilité GitHub Actions (problèmes de permissions)
+    # Pour le développement local, utilisez docker-compose.e2e.local.yml
     depends_on:
       - nginx-proxy
     environment:
@@ -143,9 +146,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000 || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 120s  # 2 min pour pnpm install + build + démarrage sur GitHub Actions
   # Playwright (pour lancer les tests - tous les navigateurs)
   # Note: Using 'latest' because specific version tags may not be available immediately on Docker Hub
   playwright:
@@ -162,7 +165,7 @@ services:
       CI: "true"
     volumes:
       - ./frontend:/app
-      - playwright_node_modules:/app/node_modules
+      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
     working_dir: /app
     networks:
       - sylius-e2e-network
@@ -170,7 +173,7 @@ services:
       sh -c "
         npm install -g pnpm &&
         rm -rf node_modules/.cache &&
-        pnpm install --force &&
+        pnpm install --no-frozen-lockfile &&
         pnpm exec playwright install --with-deps &&
         pnpm exec playwright test
       "
@@ -223,17 +226,15 @@ services:
       POSTGRES_PASSWORD: "sylius_password"
     volumes:
       - ./frontend:/app
-      - playwright_node_modules:/app/node_modules
+      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
     working_dir: /app
     networks:
       - sylius-e2e-network
     command: >
       sh -c "
-        npm install -g pnpm &&
-        rm -rf node_modules/.cache &&
-        pnpm install --force &&
-        pnpm exec playwright install --with-deps firefox &&
-        pnpm exec playwright test --project=firefox
+        npm install &&
+        npx playwright install --with-deps firefox &&
+        npx playwright test --project=firefox
       "
     profiles:
       - test-firefox
@@ -253,17 +254,15 @@ services:
       CI: "true"
     volumes:
       - ./frontend:/app
-      - playwright_node_modules:/app/node_modules
+      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
     working_dir: /app
     networks:
       - sylius-e2e-network
     command: >
       sh -c "
-        npm install -g pnpm &&
-        rm -rf node_modules/.cache &&
-        pnpm install --force &&
-        pnpm exec playwright install --with-deps webkit &&
-        pnpm exec playwright test --project=webkit
+        npm install &&
+        npx playwright install --with-deps webkit &&
+        npx playwright test --project=webkit
       "
     profiles:
       - test-webkit
@@ -283,8 +282,7 @@ volumes:
     driver: local
   nuxt_output:
     driver: local
-  playwright_node_modules:
-    driver: local
+  # playwright_node_modules retiré - Playwright réinstalle tout à chaque run
 
 networks:
   sylius-e2e-network:

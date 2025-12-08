@@ -110,6 +110,27 @@ jobs:
 
           echo "🎉 All services are healthy!"
 
+      - name: Build Sylius assets
+        run: |
+          echo "🎨 Building Sylius frontend assets..."
+
+          # Install Node.js dependencies and build assets in Sylius container
+          # Note: Using npm (not yarn) to match Dockerfile.e2e configuration
+          # Note: Using sh (not bash) because Alpine Linux base image doesn't have bash
+          docker compose -f docker-compose.e2e.yml exec -T php sh -c "
+            cd /srv/sylius && \
+            npm install --no-progress --legacy-peer-deps && \
+            npm run build:prod && \
+            php bin/console cache:clear
+          " || {
+            echo "❌ Failed to build Sylius assets"
+            echo "🔍 Checking Sylius container logs:"
+            docker compose -f docker-compose.e2e.yml logs php --tail=50
+            exit 1
+          }
+
+          echo "✅ Sylius assets built successfully"
+
       - name: Display services status
         run: |
           echo "📊 Services status:"

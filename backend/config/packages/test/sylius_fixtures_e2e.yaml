@@ -14,21 +14,27 @@ sylius_fixtures:
                     options:
                         locales:
                             - en_US
+                            - fr_FR
 
                 currency:
                     options:
                         currencies:
                             - USD
+                            - EUR
 
                 # 2. Géographie (pays pour adresses)
                 geographical:
                     options:
                         countries:
                             - US
+                            - FR
                         zones:
                             US:
                                 name: 'United States'
                                 countries: [US]
+                            FR:
+                                name: 'France'
+                                countries: [FR]
 
                 # 3. Taxes (essentielles pour les produits)
                 tax_category:
@@ -67,8 +73,10 @@ sylius_fixtures:
                               enabled: true
                               locales:
                                   - en_US
+                                  - fr_FR
                               currencies:
                                   - USD
+                                  - EUR
                               default_locale: en_US
                               base_currency: USD
 

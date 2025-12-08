@@ -13,6 +13,28 @@ fi
 
 echo "📋 DATABASE_URL: ${DATABASE_URL}"
 
+# Générer les clés JWT si elles n'existent pas
+echo "🔑 Vérification des clés JWT..."
+if [ ! -f config/jwt/private.pem ] || [ ! -f config/jwt/public.pem ]; then
+    echo "🔐 Génération des clés JWT pour E2E..."
+    mkdir -p config/jwt
+
+    # Générer la clé privée avec la passphrase de test
+    openssl genrsa -passout pass:"${JWT_PASSPHRASE:-e2e-test-passphrase}" -out config/jwt/private.pem 4096
+
+    # Extraire la clé publique
+    openssl rsa -pubout -passin pass:"${JWT_PASSPHRASE:-e2e-test-passphrase}" -in config/jwt/private.pem -out config/jwt/public.pem
+
+    # Fixer les permissions pour que PHP-FPM puisse les lire
+    chmod 644 config/jwt/private.pem config/jwt/public.pem
+
+    echo "✅ Clés JWT générées avec succès !"
+else
+    echo "✅ Clés JWT déjà présentes"
+    # Vérifier que les permissions sont correctes
+    chmod 644 config/jwt/private.pem config/jwt/public.pem
+fi
+
 # Attendre que la base de données soit prête
 echo "⏳ Attente de PostgreSQL..."
 attempt=0

@@ -5,6 +5,8 @@ RUN apk add --no-cache \
     git \
     unzip \
     postgresql-dev \
+    nodejs \
+    npm \
     && docker-php-ext-install pdo_pgsql
 
 # Configuration PHP optimisée pour GitHub Actions
@@ -42,6 +44,14 @@ COPY . .
 RUN composer dump-autoload --optimize --classmap-authoritative && \
     mkdir -p var/cache var/log var/sessions public/media config/jwt && \
     chmod -R 777 var public/media config/jwt
+
+# Installer les dépendances Node.js et builder les assets Sylius
+RUN echo "📦 Installing Node.js dependencies..." && \
+    npm install --no-progress --legacy-peer-deps && \
+    echo "🏗️ Building Sylius assets..." && \
+    npm run build:prod && \
+    echo "✅ Assets built successfully" && \
+    rm -rf node_modules  # Supprimer node_modules après le build pour réduire la taille de l'image
 
 # Copier .env.test comme .env pour satisfaire Symfony
 # Les variables d'environnement de docker-compose.yml surchargeront ces valeurs

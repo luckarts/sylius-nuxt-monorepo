@@ -39,6 +39,7 @@ export class MailpitHelper {
         return null
       }
       const message: MailpitMessage = await response.json()
+
       return message
     } catch (error) {
       return null
