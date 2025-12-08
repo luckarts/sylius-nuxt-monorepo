@@ -2,11 +2,22 @@
 set -e
 
 echo "🚀 Démarrage de Sylius..."
+echo "📋 DATABASE_URL: ${DATABASE_URL}"
 
 # Attendre que la base de données soit prête
 echo "⏳ Attente de PostgreSQL..."
+attempt=0
+max_attempts=60
+
 until php bin/console doctrine:query:sql "SELECT 1" > /dev/null 2>&1; do
-    echo "PostgreSQL n'est pas encore prêt - attente..."
+    attempt=$((attempt + 1))
+    if [ $attempt -ge $max_attempts ]; then
+        echo "❌ ERREUR: PostgreSQL n'est pas accessible après ${max_attempts} tentatives (2 minutes)"
+        echo "🔍 Tentative de diagnostic:"
+        php bin/console doctrine:query:sql "SELECT 1" 2>&1 || true
+        exit 1
+    fi
+    echo "PostgreSQL n'est pas encore prêt - tentative $attempt/$max_attempts..."
     sleep 2
 done
 echo "✅ PostgreSQL est prêt !"
