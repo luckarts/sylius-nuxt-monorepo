@@ -33,10 +33,16 @@ jobs:
           mkdir -p frontend/test-results
           chmod -R 777 frontend/playwright-report frontend/test-results
 
+      # ✅ Utiliser le fichier .env.e2e.ci pour GitHub Actions
+      - name: Setup CI environment
+        run: |
+          echo "🤖 Configuration pour GitHub Actions"
+          cp .env.e2e.ci .env
+
       - name: Build Docker images
         run: |
           echo "🏗️ Building Docker images..."
-          docker compose -f docker-compose.e2e.yml build --build-arg BUILDKIT_INLINE_CACHE=1
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci build --build-arg BUILDKIT_INLINE_CACHE=1
         env:
           DOCKER_BUILDKIT: 1
           COMPOSE_DOCKER_CLI_BUILD: 1
@@ -50,8 +56,8 @@ jobs:
 
       - name: Start E2E environment
         run: |
-          echo "🚀 Starting all services..."
-          docker compose -f docker-compose.e2e.yml up -d
+          echo "🚀 Starting all services with CI configuration..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci up -d
           echo "Services started!"
 
       - name: Wait for services to be healthy
@@ -110,6 +116,18 @@ jobs:
 
           echo "🎉 All services are healthy!"
 
+      - name: Display services status
+        run: |
+          echo "📊 Services status:"
+          docker compose -f docker-compose.e2e.yml ps
+
+      - name: Display services URLs
+        run: |
+          echo "🌐 Services available at:"
+          echo "  📱 Frontend Nuxt   : http://localhost:3000"
+          echo "  🔧 Backend Sylius  : http://localhost:8000"
+          echo "  📧 Mailpit UI      : http://localhost:8025"
+
       - name: Build Sylius assets
         run: |
           echo "🎨 Building Sylius frontend assets..."
@@ -130,18 +148,6 @@ jobs:
           }
 
           echo "✅ Sylius assets built successfully"
-
-      - name: Display services status
-        run: |
-          echo "📊 Services status:"
-          docker compose -f docker-compose.e2e.yml ps
-
-      - name: Display services URLs
-        run: |
-          echo "🌐 Services available at:"
-          echo "  📱 Frontend Nuxt   : http://localhost:3000"
-          echo "  🔧 Backend Sylius  : http://localhost:8000"
-          echo "  📧 Mailpit UI      : http://localhost:8025"
 
       - name: Run Playwright E2E tests (Firefox only)
         run: |

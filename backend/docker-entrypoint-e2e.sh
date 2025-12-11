@@ -2,9 +2,26 @@
 set -e
 set -o pipefail  # Propager les erreurs dans les pipes
 
-echo "🚀 Démarrage de Sylius E2E (optimisé pour CI/CD)..."
+echo "🚀 Démarrage de Sylius E2E..."
 
-# Créer .env depuis .env.test si le fichier n'existe pas
+#############################################
+# Détection automatique de l'environnement
+#############################################
+if [ "$CI" = "true" ]; then
+    ENV_TYPE="CI/CD (GitHub Actions)"
+    FIXTURES_SUITE="${FIXTURES_SUITE:-e2e_minimal}"
+else
+    ENV_TYPE="Local Development"
+    FIXTURES_SUITE="${FIXTURES_SUITE:-e2e_full}"
+fi
+
+echo "📍 Environnement détecté : $ENV_TYPE"
+echo "🌱 Suite de fixtures sélectionnée : $FIXTURES_SUITE"
+echo "🔗 ROUTER_DEFAULT_URI : ${ROUTER_DEFAULT_URI}"
+
+#############################################
+# Créer .env depuis .env.test si nécessaire
+#############################################
 if [ ! -f .env ]; then
     echo "📝 Création de .env depuis .env.test..."
     cp .env.test .env
@@ -68,13 +85,12 @@ php-fpm -D
 
 echo "✅ PHP-FPM démarré ! L'API est maintenant accessible."
 
-# Charger les fixtures en environnement de test (version allégée pour CI)
+# Charger les fixtures en environnement de test
 if [ "$APP_ENV" = "test" ]; then
-    echo "🌱 Chargement des fixtures E2E (version allégée)..."
-    echo "📝 Utilisation de la suite e2e_minimal..."
+    echo "🌱 Chargement des fixtures : $FIXTURES_SUITE..."
 
     # Charger les fixtures et vérifier le résultat
-    if php bin/console sylius:fixtures:load e2e_minimal --no-interaction -v 2>&1 | tee /tmp/fixtures.log; then
+    if php bin/console sylius:fixtures:load "$FIXTURES_SUITE" --no-interaction -v 2>&1 | tee /tmp/fixtures.log; then
         echo "✅ Fixtures chargées avec succès !"
     else
         echo "❌ ERREUR: Échec du chargement des fixtures"
@@ -91,10 +107,11 @@ php bin/console cache:warmup
 
 echo "✅ Sylius E2E est complètement prêt !"
 echo "📊 Statistiques :"
-echo "  - PHP-FPM: ✅ Running"
-echo "  - Database: ✅ Ready"
-echo "  - Fixtures: ✅ Loaded"
-echo "  - Cache: ✅ Warmed"
+echo "  - Environnement : $ENV_TYPE"
+echo "  - Fixtures : $FIXTURES_SUITE"
+echo "  - PHP-FPM : ✅ Running"
+echo "  - Database : ✅ Ready"
+echo "  - Cache : ✅ Warmed"
 
 # Garder le container actif (car PHP-FPM est en mode daemon)
 tail -f /dev/null

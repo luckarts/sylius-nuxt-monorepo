@@ -1,0 +1,200 @@
+# Configuration des fixtures Sylius pour E2E Testing
+# Deux suites disponibles : e2e_minimal (CI) et e2e_full (local)
+
+sylius_fixtures:
+    suites:
+        #############################################
+        # Suite minimale pour CI/CD (GitHub Actions)
+        #############################################
+        e2e_minimal:
+            listeners:
+                orm_purger: ~
+                logger: ~
+
+            fixtures:
+                # Locales et devises
+                locale:
+                    options:
+                        locales:
+                            - en_US
+                            - fr_FR
+
+                currency:
+                    options:
+                        currencies:
+                            - USD
+                            - EUR
+
+                # Géographie
+                geographical:
+                    options:
+                        countries:
+                            - US
+                            - FR
+                        zones:
+                            US:
+                                name: 'United States'
+                                countries: [US]
+                            FR:
+                                name: 'France'
+                                countries: [FR]
+
+                # Taxes
+                tax_category:
+                    options:
+                        random: 1
+
+                tax_rate:
+                    options:
+                        random: 1
+
+                # Paiement et livraison
+                payment_method:
+                    options:
+                        random: 1
+
+                shipping_category:
+                    options:
+                        random: 1
+
+                shipping_method:
+                    options:
+                        random: 1
+
+                # Taxonomie
+                taxon:
+                    options:
+                        random: 3
+
+                # Channel
+                channel:
+                    options:
+                        custom:
+                            - code: "WEB"
+                              name: "Web Store"
+                              hostname: "localhost"
+                              enabled: true
+                              locales: ["en_US", "fr_FR"]
+                              currencies: ["USD", "EUR"]
+                              default_locale: en_US
+                              base_currency: USD
+
+                # Produits (minimum viable)
+                product:
+                    options:
+                        random: 5
+
+                # Utilisateurs
+                shop_user:
+                    options:
+                        random: 2
+
+                # Adresses
+                address:
+                    options:
+                        random: 2
+
+        #############################################
+        # Suite complète pour développement local
+        #############################################
+        e2e_full:
+            listeners:
+                orm_purger: ~
+                logger: ~
+
+            fixtures:
+                # Locales et devises
+                locale:
+                    options:
+                        locales:
+                            - en_US
+                            - fr_FR
+                            - de_DE
+                            - es_ES
+
+                currency:
+                    options:
+                        currencies:
+                            - USD
+                            - EUR
+                            - GBP
+
+                # Géographie complète
+                geographical:
+                    options:
+                        countries:
+                            - US
+                            - FR
+                            - DE
+                            - ES
+                            - GB
+                        zones:
+                            US:
+                                name: 'United States'
+                                countries: [US]
+                            FR:
+                                name: 'France'
+                                countries: [FR]
+                            EU:
+                                name: 'European Union'
+                                countries: [DE, ES, FR, GB]
+
+                # Taxes
+                tax_category:
+                    options:
+                        random: 3
+
+                tax_rate:
+                    options:
+                        random: 5
+
+                # Paiement et livraison
+                payment_method:
+                    options:
+                        random: 3
+
+                shipping_category:
+                    options:
+                        random: 2
+
+                shipping_method:
+                    options:
+                        random: 3
+
+                # Taxonomie riche
+                taxon:
+                    options:
+                        random: 10
+
+                # Channel
+                channel:
+                    options:
+                        custom:
+                            - code: "WEB"
+                              name: "Web Store"
+                              hostname: "localhost"
+                              enabled: true
+                              locales: ["en_US", "fr_FR", "de_DE", "es_ES"]
+                              currencies: ["USD", "EUR", "GBP"]
+                              default_locale: en_US
+                              base_currency: USD
+
+                # Produits (catalogue complet)
+                product:
+                    options:
+                        random: 20
+
+                # Utilisateurs (plus de test users)
+                shop_user:
+                    options:
+                        random: 10
+
+                # Adresses (plus de variations)
+                address:
+                    options:
+                        random: 10
+
+                # Commandes (historique)
+                order:
+                    options:
+                        random: 5
