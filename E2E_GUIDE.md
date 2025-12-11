@@ -96,6 +96,68 @@ Le workflow se déclenche automatiquement sur :
 
 ---
 
+## 📊 Différences Local vs GitHub Actions
+
+### Tableau comparatif
+
+| Configuration | Local (`.env.e2e.local`) | GitHub Actions (`.env.e2e.ci`) | Pourquoi ? |
+|---------------|-------------------------|--------------------------------|------------|
+| **Fichier .env** | `.env.e2e.local` | `.env.e2e.ci` | Séparation des configs |
+| **ROUTER_DEFAULT_URI** | `http://localhost:8000` | `http://nginx-proxy` | Résolution DNS différente |
+| **FIXTURES_SUITE** | `e2e_full` (20 produits) | `e2e_minimal` (5 produits) | Local = riche, CI = rapide |
+| **FRONTEND_START_PERIOD** | `30s` | `120s` | Runners CI plus lents |
+| **FRONTEND_RETRIES** | `5` | `15` | CI moins stable |
+| **DOCKERFILE_BACKEND** | `Dockerfile` | `Dockerfile.e2e` | Build assets différent |
+| **Détection auto** | `CI=false` | `CI=true` | Variable GitHub Actions |
+| **Build assets** | Manuel (npm run build:prod) | Auto dans workflow | Besoin différent |
+
+### Pourquoi ces différences ?
+
+#### 🏠 Environnement Local
+
+**Objectif** : Développement rapide et confortable
+
+- **Données riches** : `e2e_full` avec 20 produits, 10 utilisateurs, 5 commandes
+  - Permet de tester des cas complexes
+  - Simule un vrai environnement e-commerce
+
+- **Timeouts courts** : 30s pour frontend
+  - Ta machine est rapide
+  - Pas besoin d'attendre longtemps
+
+- **Pas de build assets dans Docker** : `Dockerfile` standard
+  - Tu builds les assets manuellement une fois
+  - Pas besoin de rebuilder l'image Docker à chaque changement
+
+- **URL simple** : `http://localhost:8000`
+  - Accès direct depuis ta machine
+  - Pas besoin de proxy
+
+#### 🤖 GitHub Actions (CI)
+
+**Objectif** : Tests rapides et fiables
+
+- **Données minimales** : `e2e_minimal` avec 5 produits, 2 utilisateurs
+  - ⚡ Chargement fixtures 3-4x plus rapide
+  - Réduit le temps d'exécution du workflow
+  - Suffisant pour valider les fonctionnalités core
+
+- **Timeouts longs** : 120s pour frontend
+  - Les runners GitHub sont partagés (plus lents)
+  - Réseau peut être instable
+  - Sécurité : éviter les faux négatifs
+
+- **Assets pre-buildés** : `Dockerfile.e2e`
+  - Build les assets DANS l'image Docker
+  - Mais le volume mount les écrase !
+  - C'est pourquoi on rebuild après dans le workflow
+
+- **Proxy nginx** : `http://nginx-proxy`
+  - Force le header `Host: localhost` pour Sylius
+  - Évite les problèmes de routing Symfony
+
+---
+
 ## ⚙️ Configuration
 
 ### Variables d'environnement
@@ -111,6 +173,12 @@ FRONTEND_RETRIES=5
 DOCKERFILE_BACKEND=Dockerfile              # Pas de build assets
 ```
 
+**Explications :**
+- `ROUTER_DEFAULT_URI=http://localhost:8000` : URL directe sur ta machine
+- `FIXTURES_SUITE=e2e_full` : Catalogue complet pour tester tous les cas
+- `FRONTEND_START_PERIOD=30s` : Ta machine est rapide, pas besoin d'attendre
+- `DOCKERFILE_BACKEND=Dockerfile` : Image standard sans build assets (tu les builds manuellement)
+
 #### `.env.e2e.ci` (GitHub Actions)
 
 ```bash
@@ -122,14 +190,231 @@ FRONTEND_RETRIES=15
 DOCKERFILE_BACKEND=Dockerfile.e2e          # Pre-build assets
 ```
 
+**Explications :**
+- `ROUTER_DEFAULT_URI=http://nginx-proxy` : Passe par le proxy pour forcer `Host: localhost`
+- `FIXTURES_SUITE=e2e_minimal` : Minimum viable pour accélérer les tests
+- `FRONTEND_START_PERIOD=120s` : Runners GitHub lents, on laisse plus de temps
+- `DOCKERFILE_BACKEND=Dockerfile.e2e` : Image avec assets pre-buildés (mais on rebuild quand même après)
+
+### Comment fonctionne la détection automatique ?
+
+#### Le mécanisme
+
+**1. Variable d'environnement `CI`**
+
+GitHub Actions définit automatiquement `CI=true` dans tous les workflows.
+
+```yaml
+# docker-compose.e2e.yml
+services:
+  php:
+    environment:
+      CI: "${CI:-false}"  # Prend la valeur de $CI du système, sinon "false"
+```
+
+**2. Script d'entrypoint détecte l'environnement**
+
+```bash
+# backend/docker-entrypoint-e2e.sh
+if [ "$CI" = "true" ]; then
+    ENV_TYPE="CI/CD (GitHub Actions)"
+    FIXTURES_SUITE="${FIXTURES_SUITE:-e2e_minimal}"
+else
+    ENV_TYPE="Local Development"
+    FIXTURES_SUITE="${FIXTURES_SUITE:-e2e_full}"
+fi
+
+echo "📍 Environnement détecté : $ENV_TYPE"
+echo "🌱 Suite de fixtures sélectionnée : $FIXTURES_SUITE"
+```
+
+**3. Chargement des fixtures appropriées**
+
+```bash
+# Charge la suite détectée
+php bin/console sylius:fixtures:load "$FIXTURES_SUITE" --no-interaction
+```
+
+#### Exemple de logs
+
+**En local :**
+```
+🚀 Démarrage de Sylius E2E...
+📍 Environnement détecté : Local Development
+🌱 Suite de fixtures sélectionnée : e2e_full
+🔗 ROUTER_DEFAULT_URI : http://localhost:8000
+✅ PostgreSQL est prêt !
+🌱 Chargement des fixtures : e2e_full...
+Running suite "e2e_full"...
+Running fixture "product"... (20 produits)
+✅ Fixtures chargées avec succès !
+```
+
+**En GitHub Actions :**
+```
+🚀 Démarrage de Sylius E2E...
+📍 Environnement détecté : CI/CD (GitHub Actions)
+🌱 Suite de fixtures sélectionnée : e2e_minimal
+🔗 ROUTER_DEFAULT_URI : http://nginx-proxy
+✅ PostgreSQL est prêt !
+🌱 Chargement des fixtures : e2e_minimal...
+Running suite "e2e_minimal"...
+Running fixture "product"... (5 produits)
+✅ Fixtures chargées avec succès !
+```
+
 ### Suites de fixtures
 
-| Suite | Produits | Users | Commandes | Usage |
-|-------|----------|-------|-----------|-------|
-| **e2e_minimal** | 5 | 2 | 0 | CI/CD (rapide) |
-| **e2e_full** | 20 | 10 | 5 | Local (complet) |
+| Suite | Produits | Users | Commandes | Temps chargement | Usage |
+|-------|----------|-------|-----------|------------------|-------|
+| **e2e_minimal** | 5 | 2 | 0 | ~30s | CI/CD (rapide) |
+| **e2e_full** | 20 | 10 | 5 | ~2-3 min | Local (complet) |
+
+**Contenu des suites :**
+
+#### `e2e_minimal` (CI/CD)
+```yaml
+# Minimum viable pour tester les fonctionnalités core
+locale: [en_US, fr_FR]
+currency: [USD, EUR]
+countries: [US, FR]
+zones: [US, FR]
+tax_category: 1
+tax_rate: 1
+payment_method: 1
+shipping_method: 1
+taxon: 3 (catégories)
+channel: WEB (Web Store)
+product: 5 produits
+shop_user: 2 utilisateurs
+address: 2 adresses
+```
+
+#### `e2e_full` (Local)
+```yaml
+# Catalogue complet pour environnement réaliste
+locale: [en_US, fr_FR, de_DE, es_ES]
+currency: [USD, EUR, GBP]
+countries: [US, FR, DE, ES, GB]
+zones: [US, FR, EU (multi-pays)]
+tax_category: 3
+tax_rate: 5
+payment_method: 3
+shipping_method: 3
+taxon: 10 (catégories)
+channel: WEB (Web Store)
+product: 20 produits
+shop_user: 10 utilisateurs
+address: 10 adresses
+order: 5 commandes (historique)
+```
 
 Fichier : `backend/config/packages/test/sylius_fixtures.yaml`
+
+### Schéma du flow de configuration
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DÉMARRAGE E2E                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                ┌─────────────┴─────────────┐
+                │                           │
+         ┌──────▼──────┐            ┌──────▼──────┐
+         │    LOCAL    │            │  GITHUB CI  │
+         └──────┬──────┘            └──────┬──────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ ./start-e2e.sh start   │  │ Workflow déclenché     │
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ Détecte .env.e2e.local │  │ Copie .env.e2e.ci → .env│
+    │ (ou le crée)           │  │                        │
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ docker-compose up      │  │ docker-compose build   │
+    │ --env-file             │  │ --env-file .env.e2e.ci │
+    │   .env.e2e.local       │  │                        │
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+                │                  ┌────────▼────────┐
+                │                  │ docker-compose  │
+                │                  │ up -d           │
+                │                  └────────┬────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ Container PHP démarre  │  │ Container PHP démarre  │
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ Entrypoint détecte:    │  │ Entrypoint détecte:    │
+    │ CI=false (absent)      │  │ CI=true (GitHub)       │
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ FIXTURES_SUITE=        │  │ FIXTURES_SUITE=        │
+    │   e2e_full (default)   │  │   e2e_minimal (default)│
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ Charge 20 produits     │  │ Charge 5 produits      │
+    │ 10 users, 5 orders     │  │ 2 users, 0 orders      │
+    └───────────┬────────────┘  └───────────┬────────────┘
+                │                           │
+                │                  ┌────────▼────────┐
+                │                  │ Build assets    │
+                │                  │ npm install +   │
+                │                  │ build:prod      │
+                │                  └────────┬────────┘
+                │                           │
+    ┌───────────▼────────────┐  ┌───────────▼────────────┐
+    │ ✅ Prêt en ~3 min      │  │ ✅ Prêt en ~5-6 min    │
+    │ http://localhost:3000  │  │ Tests Playwright       │
+    └────────────────────────┘  └────────────────────────┘
+```
+
+### Cas d'usage : Quand utiliser quelle config ?
+
+#### 🏠 Utiliser `.env.e2e.local` (e2e_full)
+
+**Quand :**
+- Développement quotidien
+- Tests manuels d'UI
+- Debugging de bugs spécifiques
+- Validation de nouvelles fonctionnalités
+- Tests de performance avec beaucoup de données
+
+**Avantages :**
+- ✅ Environnement réaliste (beaucoup de produits)
+- ✅ Données de test variées
+- ✅ Peut tester l'historique de commandes
+- ✅ Simule un vrai e-commerce
+
+**Inconvénients :**
+- ⏱️ Chargement fixtures plus long (~2-3 min)
+- 💾 Utilise plus de RAM/CPU
+
+#### 🤖 Utiliser `.env.e2e.ci` (e2e_minimal)
+
+**Quand :**
+- Tests automatisés sur GitHub Actions
+- CI/CD pipeline
+- Tests de régression rapides
+- Validation avant merge
+- Tests unitaires E2E
+
+**Avantages :**
+- ⚡ Chargement très rapide (~30s)
+- 💰 Économise du temps de runner GitHub
+- 🎯 Suffisant pour valider les fonctionnalités core
+- ✅ Moins de faux positifs (timeouts)
+
+**Inconvénients :**
+- 📉 Moins de variété de données
+- ❌ Pas d'historique de commandes
+- ❌ Moins de produits pour tester le catalogue
 
 ---
 
