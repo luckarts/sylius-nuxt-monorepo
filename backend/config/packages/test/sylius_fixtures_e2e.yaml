@@ -1,0 +1,88 @@
+# Fixtures minimales pour CI/CD E2E
+# Version allégée pour accélérer les tests sur GitHub Actions
+# Pour un environnement local complet, utilisez docker-compose.e2e.local.yml
+
+sylius_fixtures:
+    suites:
+        e2e_minimal:
+            listeners:
+                logger: ~
+
+            fixtures:
+                # 1. Locales et devises (prérequis pour channel)
+                locale:
+                    options:
+                        locales:
+                            - en_US
+
+                currency:
+                    options:
+                        currencies:
+                            - USD
+
+                # 2. Géographie (pays pour adresses)
+                geographical:
+                    options:
+                        countries:
+                            - US
+                        zones:
+                            US:
+                                name: 'United States'
+                                countries: [US]
+
+                # 3. Taxes (essentielles pour les produits)
+                tax_category:
+                    options:
+                        random: 1
+
+                tax_rate:
+                    options:
+                        random: 1
+
+                # 4. Méthodes de paiement et livraison (essentielles pour checkout)
+                payment_method:
+                    options:
+                        random: 1
+
+                shipping_category:
+                    options:
+                        random: 1
+
+                shipping_method:
+                    options:
+                        random: 1
+
+                # 5. Taxonomie minimale (catégories produits)
+                taxon:
+                    options:
+                        random: 3
+
+                # 6. Channel (configuration boutique)
+                channel:
+                    options:
+                        custom:
+                            - code: "WEB"
+                              name: "Web Store"
+                              hostname: "localhost"
+                              enabled: true
+                              locales:
+                                  - en_US
+                              currencies:
+                                  - USD
+                              default_locale: en_US
+                              base_currency: USD
+
+                # 7. Produits pour les tests (minimum viable)
+                product:
+                    options:
+                        random: 5
+
+                # 8. Utilisateurs de test (essentiel pour auth)
+                shop_user:
+                    options:
+                        random: 2
+
+                # 9. Adresses de test
+                address:
+                    options:
+                        random: 2
