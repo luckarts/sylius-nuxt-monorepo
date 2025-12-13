@@ -38,16 +38,18 @@ services:
       - sylius-e2e-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sylius -d sylius_e2e && psql -U sylius -d sylius_e2e -c 'SELECT 1' || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+      # ✅ Variables d'environnement pour le healthcheck PostgreSQL
+      interval: ${POSTGRES_HEALTHCHECK_INTERVAL:-10s}
+      timeout: ${POSTGRES_HEALTHCHECK_TIMEOUT:-5s}
+      retries: ${POSTGRES_HEALTHCHECK_RETRIES:-10}
       start_period: 10s
 
-  # Backend Sylius PHP-FPM (optimisé pour CI/CD)
+  # Backend Sylius PHP-FPM
   php:
     build:
       context: ./backend
-      dockerfile: Dockerfile.e2e
+      # ✅ Utilise la variable d'environnement pour choisir le Dockerfile
+      dockerfile: ${DOCKERFILE_BACKEND:-Dockerfile}
       args:
         APP_ENV: test
     container_name: sylius-php-e2e
@@ -67,11 +69,15 @@ services:
       MAILER_DSN: "smtp://mailpit:1025"
       MESSENGER_TRANSPORT_DSN: "doctrine://default"
       CORS_ALLOW_ORIGIN: "^http://localhost:3000$$"
-      # ROUTER_DEFAULT_URI doit pointer vers nginx-proxy pour que les containers Docker puissent communiquer
-      # Sur CI/GitHub Actions, les containers ne peuvent pas accéder à "localhost"
-      ROUTER_DEFAULT_URI: "http://nginx-proxy"  # ✅ Utiliser nginx-proxy pour les redirections internes
-      SYLIUS_FIXTURES_HOSTNAME: "localhost"  # Hostname du channel pour les API calls (sans port)
-      TRUSTED_HOSTS: "^(localhost|sylius|nginx-proxy|127\\.0\\.0\\.1)$"  # ✅ Ajouter nginx-proxy aux hosts de confiance
+      # ✅ Variable d'environnement pour ROUTER_DEFAULT_URI
+      ROUTER_DEFAULT_URI: ${ROUTER_DEFAULT_URI:-http://localhost:8000}
+      SYLIUS_FIXTURES_HOSTNAME: "localhost"
+      # ✅ Variable d'environnement pour TRUSTED_HOSTS
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-^(localhost|sylius|127\\.0\\.0\\.1)$}
+      # ✅ Variable CI pour détecter GitHub Actions
+      CI: "${CI:-false}"
+      # ✅ Variable pour sélectionner la suite de fixtures
+      FIXTURES_SUITE: ${FIXTURES_SUITE:-e2e_full}
     volumes:
       - ./backend:/srv/sylius
       - sylius_var:/srv/sylius/var
@@ -145,10 +151,12 @@ services:
       - sylius-e2e-network
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000 || exit 1"]
+      # ✅ Variables d'environnement pour le healthcheck frontend
       interval: 10s
-      timeout: 10s
-      retries: 15
-      start_period: 120s  # 2 min pour pnpm install + build + démarrage sur GitHub Actions
+      timeout: ${FRONTEND_TIMEOUT:-5s}
+      retries: ${FRONTEND_RETRIES:-5}
+      start_period: ${FRONTEND_START_PERIOD:-30s}
+
   # Playwright (pour lancer les tests - tous les navigateurs)
   # Note: Using 'latest' because specific version tags may not be available immediately on Docker Hub
   playwright:
