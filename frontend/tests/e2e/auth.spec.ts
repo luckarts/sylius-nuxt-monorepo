@@ -48,12 +48,6 @@ async function expectToast(
         .textContent()
         .catch(() => 'N/A')
 
-      console.error('❌ Toast variant mismatch!')
-      console.error(`   Expected: ${variant}`)
-      console.error(`   Actual classes: ${toastClass}`)
-      console.error(`   Toast title: ${toastTitle}`)
-      console.error(`   Toast description: ${toastDescription}`)
-
       throw new Error(
         `Toast variant mismatch. Expected "${variant}" but got different variant. Title: "${toastTitle}", Description: "${toastDescription}"`
       )
@@ -98,8 +92,77 @@ test.describe('Authentication - Registration Flow', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  ///fr_FR/login
+  test('should successfully register a new customer and display success card', async ({ page }) => {
+    // ✅ STEP 0: Verify Sylius login page is accessible
+    const loginPageResponse = await page.request.get('http://nginx-proxy/fr_FR/login', {
+      timeout: 10000,
+      failOnStatusCode: false,
+    })
+
+    const statusCode = loginPageResponse.status()
+
+    if (statusCode !== 200) {
+      // Capture response body for debugging
+      const responseBody = await loginPageResponse
+        .text()
+        .catch(() => 'Unable to read response body')
+
+      throw new Error(
+        `Sylius login page returned ${statusCode}. Check backend logs. Response: ${responseBody.substring(0, 200)}`
+      )
+    }
+
+    // Generate unique email to avoid conflicts
+    const timestamp = Date.now()
+    const testEmail = `test.user.${timestamp}@example.com`
+
+    // Fill all required fields
+    await page.getByLabel(/^prénom|^first name/i).fill('Jean')
+    await page.getByLabel(/^nom(?! de)|^last name/i).fill('Dupont')
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/téléphone|phone/i).fill('+33 6 12 34 56 78')
+
+    // Fill password fields
+    const passwordFields = page.getByLabel(/mot de passe|password/i)
+    await passwordFields.first().fill('SecurePass123!')
+    await passwordFields.last().fill('SecurePass123!')
+
+    // Optionally subscribe to newsletter
+    await page.getByLabel(/newsletter/i).check()
+
+    // Submit form
+    await page.getByRole('button', { name: /s'inscrire|sign up/i }).click()
+
+    // ✅ Check for success toast FIRST (appears immediately)
+    await expectToast(page, {
+      variant: 'success',
+      title: /inscription réussie|registration successful/i,
+      timeout: 5000,
+    })
+
+    // Check that success card is displayed
+    await expect(
+      page.getByRole('heading', { name: /inscription réussie|registration successful/i })
+    ).toBeVisible()
+
+    // Check that the email is displayed in the success message
+    await expect(page.getByText(testEmail)).toBeVisible()
+
+    // Check for next steps instructions
+    await expect(
+      page.getByText(/vérifiez votre boîte de réception|check your inbox/i)
+    ).toBeVisible()
+
+    // Check for login link in success card
+    await expect(
+      page.getByRole('link', { name: /aller à la page de connexion|go to login page/i })
+    ).toBeVisible()
+
+    // Check that the form is no longer visible (replaced by success card)
+    await expect(page.getByRole('button', { name: /s'inscrire|sign up/i })).not.toBeVisible()
+  })
   /*
+
   test('should display registration page with all form fields', async ({ page }) => {
     // Check URL
     await expect(page).toHaveURL('/auth/register')
@@ -206,57 +269,8 @@ test.describe('Authentication - Registration Flow', () => {
     // Check for password mismatch error
     await expect(page.getByText(/les mots de passe ne correspondent pas|passwords do not match/i)).toBeVisible()
   })
-*/
-  test('should successfully register a new customer and display success card', async ({ page }) => {
-    // Generate unique email to avoid conflicts
-    const timestamp = Date.now()
-    const testEmail = `test.user.${timestamp}@example.com`
 
-    // Fill all required fields
-    await page.getByLabel(/^prénom|^first name/i).fill('Jean')
-    await page.getByLabel(/^nom(?! de)|^last name/i).fill('Dupont')
-    await page.getByLabel(/email/i).fill(testEmail)
-    await page.getByLabel(/téléphone|phone/i).fill('+33 6 12 34 56 78')
-
-    // Fill password fields
-    const passwordFields = page.getByLabel(/mot de passe|password/i)
-    await passwordFields.first().fill('SecurePass123!')
-    await passwordFields.last().fill('SecurePass123!')
-
-    // Optionally subscribe to newsletter
-    await page.getByLabel(/newsletter/i).check()
-
-    // Submit form
-    await page.getByRole('button', { name: /s'inscrire|sign up/i }).click()
-
-    // ✅ Check for success toast FIRST (appears immediately)
-    await expectToast(page, {
-      variant: 'success',
-      title: /inscription réussie|registration successful/i,
-      timeout: 5000,
-    })
-
-    // Check that success card is displayed
-    await expect(
-      page.getByRole('heading', { name: /inscription réussie|registration successful/i })
-    ).toBeVisible()
-
-    // Check that the email is displayed in the success message
-    await expect(page.getByText(testEmail)).toBeVisible()
-
-    // Check for next steps instructions
-    await expect(
-      page.getByText(/vérifiez votre boîte de réception|check your inbox/i)
-    ).toBeVisible()
-
-    // Check for login link in success card
-    await expect(
-      page.getByRole('link', { name: /aller à la page de connexion|go to login page/i })
-    ).toBeVisible()
-
-    // Check that the form is no longer visible (replaced by success card)
-    await expect(page.getByRole('button', { name: /s'inscrire|sign up/i })).not.toBeVisible()
-  })
+  */
 
   test('should show error toast when registering with existing email', async ({ page }) => {
     // NOTE: This test requires the backend API to validate duplicate emails
@@ -289,21 +303,13 @@ test.describe('Authentication - Registration Flow', () => {
       const errorToast = page
         .locator('[role="status"], [role="alert"]')
         .filter({ hasText: /erreur|error/i })
-      const errorToastVisible = await errorToast.isVisible().catch(() => false)
-
-      if (!errorToastVisible) {
-        console.warn('⚠️  Error toast did not appear after duplicate email rejection')
-      }
+      await errorToast.isVisible().catch(() => false)
 
       // Check that we're still on the registration page
       await expect(page).toHaveURL('/auth/register')
       await expect(signUpButton).toBeVisible()
     } else {
       // Backend did not reject (success card appeared) - this indicates the backend is not validating properly
-      console.warn(
-        '⚠️  Registration succeeded with "existing" email - backend may not be validating duplicates'
-      )
-
       // Verify success card appeared (even though this is unexpected behavior)
       await expect(
         page.getByRole('heading', { name: /inscription réussie|registration successful/i })
@@ -354,7 +360,6 @@ test.describe('Authentication - Registration Flow', () => {
     const testPassword = 'SecurePass123!'
 
     // 📝 STEP 1: Register user
-    console.log('📝 Step 1: Registering new user...')
     await page.getByLabel(/^prénom|^first name/i).fill('Jean')
     await page.getByLabel(/^nom(?! de)|^last name/i).fill('Dupont')
     await page.getByLabel(/email/i).fill(testEmail)
@@ -372,192 +377,132 @@ test.describe('Authentication - Registration Flow', () => {
     await expect(
       page.getByRole('heading', { name: /inscription réussie|registration successful/i })
     ).toBeVisible()
-    console.log('✅ Registration successful')
 
     // 📧 STEP 2: Check Mailpit for verification email
-    console.log('📧 Step 2: Checking Mailpit for verification email...')
-    console.log(`🔍 Looking for email sent to: ${testEmail}`)
-    console.log(`🔍 Mailpit URL: ${process.env.MAILPIT_URL || 'http://localhost:8025'}`)
-
-    // Debug: Check all messages in Mailpit before waiting
-    const allMessagesBefore = await mailpit.getMessages()
-    console.log(`📬 Total messages in Mailpit BEFORE wait: ${allMessagesBefore.length}`)
-    if (allMessagesBefore.length > 0) {
-      console.log('📧 Messages found:')
-      allMessagesBefore.forEach((msg, idx) => {
-        console.log(
-          `  ${idx + 1}. To: ${msg.To.map((t) => t.Address).join(', ')} | Subject: ${msg.Subject}`
-        )
-      })
-    }
-
     const email = await mailpit.waitForMessage(
       (msg) => msg.To.some((to) => to.Address === testEmail),
       30000 // 30 seconds timeout (increased for GitHub Actions)
     )
 
-    // Debug: If email not found, show all messages
-    if (!email) {
-      const allMessagesAfter = await mailpit.getMessages()
-      console.error(`❌ Email not found! Total messages in Mailpit: ${allMessagesAfter.length}`)
-      if (allMessagesAfter.length > 0) {
-        console.error('📧 All messages in Mailpit:')
-        allMessagesAfter.forEach((msg, idx) => {
-          console.error(
-            `  ${idx + 1}. To: ${msg.To.map((t) => t.Address).join(', ')} | Subject: ${msg.Subject}`
-          )
-        })
-      } else {
-        console.error('❌ Mailpit is empty - no emails received at all!')
-        console.error('💡 Possible causes:')
-        console.error('   1. Sylius did not send the email (check MAILER_DSN)')
-        console.error('   2. Email sending is disabled in test environment')
-        console.error('   3. Network issue between Sylius and Mailpit')
-      }
-    }
-
     // Assert email exists
     expect(email).not.toBeNull()
-    console.log('✅ Email found in Mailpit')
 
     // Assert email recipient
     expect(email?.To[0].Address).toBe(testEmail)
 
     // Assert email subject contains verification or welcome text
-    expect(email?.Subject).toMatch(/verify|vérifi|bienvenue|welcome/i)
-    console.log(`📧 Email subject: "${email?.Subject}"`)
+    const subjectTrimmed = email?.Subject?.trim() || ''
+    expect(subjectTrimmed).toMatch(/verify|verification|vérification|bienvenue|welcome/i)
 
     // Assert email contains customer name
     //expect(email?.HTML).toContain('Jean')
     //expect(email?.HTML).toContain('Dupont')
 
     // 🔗 STEP 3: Extract token from email and verify
-    console.log('🔗 Step 3: Extracting verification token from email...')
-
     // Extraire le token de vérification depuis l'email
     const token = mailpit.extractToken(email!, 'verify')
 
     expect(token).not.toBeNull()
-    console.log('🔑 Token extracted:', token)
 
     // Construire l'URL de vérification Sylius
     // Note: Sylius tourne sur http://sylius dans Docker, mais est accessible via http://localhost pour le navigateur nginx-proxy
     const verifyUrl = `http://nginx-proxy/fr_FR/verify/${token}`
-    console.log('🔗 Verification URL:', verifyUrl)
 
     // ✅ STEP 4: Call Sylius verification endpoint without following redirects
-    console.log('✅ Step 4: Calling Sylius verification endpoint...')
+    // Test nginx-proxy connectivity first
+    try {
+      await page.request.get('http://nginx-proxy/health', {
+        timeout: 5000,
+      })
+    } catch (error: unknown) {
+      throw new Error(
+        `Cannot reach nginx-proxy. Make sure services are running. Error: ${error.message}`
+      )
+    }
 
     // Use page.request instead of page.goto to control redirect behavior
     // This triggers the verification without trying to navigate to the final redirect URL
     const response = await page.request.get(verifyUrl, {
       maxRedirects: 0, // Don't follow redirects
       failOnStatusCode: false, // Don't throw on 302
+      timeout: 30000, // 30 seconds timeout (GitHub Actions can be slower)
     })
 
     const statusCode = response.status()
-    console.log(`📊 Sylius verification response status: ${statusCode}`)
 
     // Sylius returns 302 (redirect) on successful verification
     if (statusCode === 302) {
       const redirectLocation = response.headers().location
-      console.log(`✅ Verification successful! Sylius redirects to: ${redirectLocation}`)
 
       // Verify it redirects to account dashboard
       if (redirectLocation?.includes('/fr_FR/account/dashboard')) {
-        console.log('✅ First redirect to account dashboard')
-
         // 🔗 STEP 4.1: Follow the redirect to see if it redirects again to login (user not authenticated)
-        console.log(
-          '🔗 Step 4.1: Checking if dashboard redirects to login (user not authenticated)...'
-        )
-
         const dashboardResponse = await page.request.get(`http://nginx-proxy${redirectLocation}`, {
           maxRedirects: 0,
           failOnStatusCode: false,
         })
 
         const dashboardStatusCode = dashboardResponse.status()
-        console.log(`📊 Dashboard response status: ${dashboardStatusCode}`)
 
         if (dashboardStatusCode === 302) {
           const secondRedirect = dashboardResponse.headers().location
-          console.log(`🔄 Dashboard redirects to: ${secondRedirect}`)
 
           if (secondRedirect?.includes('/login')) {
-            console.log('✅ Correctly redirects to login page (user not authenticated)')
-
             // 🔗 STEP 4.2: Navigate to login page to verify success message
-            console.log(
-              '🔗 Step 4.2: Navigating to login page to check verification success message...'
-            )
-
-            // Extract path from redirect URL (remove http://localhost prefix if present)
+            // Extract path from redirect URL (remove http://localhost or http://nginx-proxy prefix if present)
             const loginPath = secondRedirect.replace(/^https?:\/\/[^/]+/, '')
-            console.log(`📍 Extracted login path: ${loginPath}`)
-
-            await page.goto(`http://nginx-proxy${loginPath}`, {
-              waitUntil: 'domcontentloaded',
-              timeout: 15000,
+            const response = await page.goto(`http://nginx-proxy${loginPath}`, {
+              waitUntil: 'load', // Wait for full page load including flash messages
+              timeout: 30000, // Increased timeout for GitHub Actions
             })
 
-            // Wait for page to load
+            expect(response).not.toBeNull()
+            expect(response!.status()).toBe(200)
+
+            // Wait for page to fully load (flash messages render on load)
             await page.waitForTimeout(1000)
 
-            // Check for success message (flash message from Sylius)
-            // Common selectors for Sylius flash messages
-            const successMessage = await page
-              .locator('.alert.alert-success, .flash-message.success, [role="alert"]')
-              .first()
+            // Try multiple selectors for success messages
+            const successSelectors = [
+              '[role="alert"][class*="success"]',
+              '[role="alert"][class*="green"]',
+              '.alert.alert-success',
+              '.flash-message.success',
+              '[data-variant="success"]',
+            ]
 
-            if (await successMessage.isVisible({ timeout: 3000 }).catch(() => false)) {
-              const messageText = await successMessage.textContent()
-              console.log(`✅ Success message displayed: "${messageText?.trim()}"`)
+            let successMessageFound = false
+            let successMessageText = ''
 
-              // Verify message contains verification-related text
-              if (messageText?.match(/verif|confirmed|activé|activated/i)) {
-                console.log('✅ Message confirms email verification')
-              } else {
-                console.warn(
-                  `⚠️  Message text doesn't mention verification: "${messageText?.trim()}"`
-                )
+            for (const selector of successSelectors) {
+              const element = page.locator(selector).first()
+              const isVisible = await element.isVisible().catch(() => false)
+
+              if (isVisible) {
+                successMessageText = (await element.textContent().catch(() => '')) || ''
+                successMessageFound = true
+                break
               }
-            } else {
-              console.warn('⚠️  No success message found on login page')
-              // Take screenshot for debugging
-              await page.screenshot({ path: 'login-page-no-message.png' })
             }
-          } else {
-            console.warn(`⚠️  Unexpected second redirect: ${secondRedirect}`)
+
+            if (!successMessageFound) {
+              // Take screenshot for debugging
+              const screenshotPath = `test-results/login-page-no-message-${Date.now()}.png`
+              await page.screenshot({ path: screenshotPath, fullPage: true })
+            }
           }
-        } else if (dashboardStatusCode === 200) {
-          console.warn(
-            '⚠️  Dashboard returned 200 (should redirect to login since user is not authenticated)'
-          )
         }
-      } else {
-        console.warn(
-          `⚠️  Unexpected redirect location: ${redirectLocation} (expected /fr_FR/account/dashboard)`
-        )
       }
-    } else if (statusCode === 200) {
-      console.log('✅ Verification endpoint returned 200 OK')
-    } else {
-      console.warn(`⚠️  Unexpected status code: ${statusCode}`)
     }
 
     // Wait for Sylius to process the verification server-side
-    console.log('⏳ Waiting for Sylius to complete verification processing...')
     await page.waitForTimeout(2000)
 
     // Sylius may have redirected to its own page or shown a success message
     // We don't need to verify the Sylius page, just ensure the verification was processed
     // 🔐 STEP 6: Test login with verified account
-    console.log('🔐 Step 6: Testing login with verified account...')
-
     // Navigate to our Nuxt app login page
     await page.goto('/auth/login', { waitUntil: 'networkidle' })
-    console.log('📍 Now on login page:', page.url())
 
     // Fill login form
     await page.getByLabel(/email/i).fill(testEmail)
@@ -576,27 +521,16 @@ test.describe('Authentication - Registration Flow', () => {
     const isLoginSuccessful = !loginUrl.includes('/auth/login')
 
     if (isLoginSuccessful) {
-      console.log('✅ Login successful! Email verification complete.')
       expect(loginUrl).not.toContain('/auth/login')
     } else {
       // Login failed - may indicate email is not verified or other issue
-      console.warn('⚠️  Login after verification failed')
-      console.warn('   Current URL:', loginUrl)
-
-      // Check for error messages
-      const errorMsg = await page
-        .getByText(/erreur|error|invalide|invalid/i)
-        .textContent()
-        .catch(() => null)
-      if (errorMsg) {
-        console.warn('   Error message:', errorMsg)
-      }
+      // Take screenshot for visual debugging
+      const screenshotPath = `test-results/login-failure-${Date.now()}.png`
+      await page.screenshot({ path: screenshotPath, fullPage: true })
 
       // This test should fail if login doesn't work after verification
       expect(isLoginSuccessful).toBe(true)
     }
-
-    console.log('🎉 Full email verification flow completed successfully!')
   })
   /*
   test('should verify email content and structure', async ({ page }) => {
