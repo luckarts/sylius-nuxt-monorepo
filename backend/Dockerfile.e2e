@@ -1,0 +1,68 @@
+FROM ghcr.io/sylius/sylius-php:8.3-alpine
+
+# Installer les packages système nécessaires et extensions PHP
+RUN apk add --no-cache \
+    git \
+    unzip \
+    postgresql-dev \
+    nodejs \
+    npm \
+    && docker-php-ext-install pdo_pgsql
+
+# Configuration PHP optimisée pour GitHub Actions
+# Memory limit augmentée pour le chargement des fixtures
+RUN echo "memory_limit = 512M" > /usr/local/etc/php/conf.d/e2e-optimizations.ini && \
+    echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/e2e-optimizations.ini && \
+    echo "opcache.enable = 1" >> /usr/local/etc/php/conf.d/e2e-optimizations.ini && \
+    echo "opcache.memory_consumption = 128" >> /usr/local/etc/php/conf.d/e2e-optimizations.ini && \
+    echo "opcache.max_accelerated_files = 10000" >> /usr/local/etc/php/conf.d/e2e-optimizations.ini && \
+    echo "realpath_cache_size = 4M" >> /usr/local/etc/php/conf.d/e2e-optimizations.ini && \
+    echo "realpath_cache_ttl = 600" >> /usr/local/etc/php/conf.d/e2e-optimizations.ini
+
+# Définir le timezone par défaut
+ENV TZ=Europe/Paris
+RUN echo "date.timezone = ${TZ}" > /usr/local/etc/php/conf.d/timezone.ini
+
+# Définir le répertoire de travail (même chemin que Nginx)
+WORKDIR /srv/sylius
+
+# Copier les fichiers composer en premier (pour le cache Docker)
+COPY composer.json composer.lock symfony.lock ./
+
+# Installer les dépendances Composer
+RUN composer install \
+    --no-interaction \
+    --prefer-dist \
+    --no-autoloader \
+    --no-scripts \
+    --ignore-platform-reqs
+
+# Copier le reste du code source
+COPY . .
+
+# Finaliser l'installation Composer et générer l'autoloader
+RUN composer dump-autoload --optimize --classmap-authoritative && \
+    mkdir -p var/cache var/log var/sessions public/media config/jwt && \
+    chmod -R 777 var public/media config/jwt
+
+# Installer les dépendances Node.js et builder les assets Sylius
+RUN echo "📦 Installing Node.js dependencies..." && \
+    npm install --no-progress --legacy-peer-deps && \
+    echo "🏗️ Building Sylius assets..." && \
+    npm run build:prod && \
+    echo "✅ Assets built successfully" && \
+    rm -rf node_modules  # Supprimer node_modules après le build pour réduire la taille de l'image
+
+# Copier .env.test comme .env pour satisfaire Symfony
+# Les variables d'environnement de docker-compose.yml surchargeront ces valeurs
+RUN cp .env.test .env
+
+# Copier le script d'entrypoint E2E optimisé
+COPY docker-entrypoint-e2e.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Exposition du port (si besoin pour healthcheck)
+EXPOSE 9000
+
+# Entrypoint pour initialiser Sylius en mode E2E
+ENTRYPOINT ["docker-entrypoint.sh"]
