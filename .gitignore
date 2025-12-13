@@ -1,6 +1,13 @@
 # Playwright & E2E test outputs
-<<<<<<< Updated upstream
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
+# Cypress (if used)
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
 
 # Frontend (Nuxt)
 frontend/node_modules/
@@ -14,8 +21,10 @@ backend/var/
 backend/.env.local
 backend/.env.*.local
 backend/.env
+
 # Docker
 .docker/data/
+.docker-data/
 *.log
 
 # IDE
@@ -28,7 +37,14 @@ backend/.env
 .DS_Store
 Thumbs.db
 
-git restore --staged
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Assets
 backend/public/assets
 backend/public/build
 backend/public/css
@@ -95,40 +111,12 @@ backend/behat.yml
 ###> liip/imagine-bundle ###
 backend/public/media/cache/
 ###< liip/imagine-bundle ###
-=======
-test-results/
-playwright-report/
-blob-report/
-playwright/.cache/
-
-# Cypress (if used)
-cypress/videos/
-cypress/screenshots/
-cypress/downloads/
->>>>>>> Stashed changes
-
-# Docker volumes
-.docker-data/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 # Environment files
 .env
 .env.local
 .env.*.local
 !.env.example
+
+# E2E local environment
+.env.e2e.local
