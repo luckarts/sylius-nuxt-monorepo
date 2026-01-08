@@ -161,7 +161,6 @@ test.describe('Authentication - Registration Flow', () => {
     // Check that the form is no longer visible (replaced by success card)
     await expect(page.getByRole('button', { name: /s'inscrire|sign up/i })).not.toBeVisible()
   })
-  /*
 
   test('should display registration page with all form fields', async ({ page }) => {
     // Check URL
@@ -267,10 +266,10 @@ test.describe('Authentication - Registration Flow', () => {
     await page.waitForTimeout(500)
 
     // Check for password mismatch error
-    await expect(page.getByText(/les mots de passe ne correspondent pas|passwords do not match/i)).toBeVisible()
+    await expect(
+      page.getByText(/les mots de passe ne correspondent pas|passwords do not match/i)
+    ).toBeVisible()
   })
-
-  */
 
   test('should show error toast when registering with existing email', async ({ page }) => {
     // NOTE: This test requires the backend API to validate duplicate emails
@@ -531,5 +530,155 @@ test.describe('Authentication - Registration Flow', () => {
       // This test should fail if login doesn't work after verification
       expect(isLoginSuccessful).toBe(true)
     }
+  })
+})
+
+test.describe('Authentication - Middleware & Redirect Flow', () => {
+  test('should redirect unauthenticated user to login when accessing protected page', async ({
+    page,
+  }) => {
+    // Try to access dashboard without authentication
+    await page.goto('/dashboard')
+
+    // Wait for redirect
+    await page.waitForLoadState('networkidle')
+
+    // Should be redirected to login page
+    await expect(page).toHaveURL(/\/auth\/login/)
+
+    // Check that redirect query parameter is present
+    const url = new URL(page.url())
+    expect(url.searchParams.get('redirect')).toBe('/dashboard')
+  })
+
+  test('should redirect to originally requested page after successful login', async ({ page }) => {
+    // Generate unique email for this test
+    const timestamp = Date.now()
+    const testEmail = `test.redirect.${timestamp}@example.com`
+    const testPassword = 'SecurePass123!'
+
+    // STEP 1: Register a new user first
+    await page.goto('/auth/register')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByLabel(/^prénom|^first name/i).fill('Test')
+    await page.getByLabel(/^nom(?! de)|^last name/i).fill('User')
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/téléphone|phone/i).fill('+33 6 12 34 56 78')
+
+    const passwordFields = page.getByLabel(/mot de passe|password/i)
+    await passwordFields.first().fill(testPassword)
+    await passwordFields.last().fill(testPassword)
+
+    await page.getByRole('button', { name: /s'inscrire|sign up/i }).click()
+
+    // Wait for registration to complete
+    await page.waitForTimeout(2000)
+    await expect(
+      page.getByRole('heading', { name: /inscription réussie|registration successful/i })
+    ).toBeVisible()
+
+    // STEP 2: Try to access protected page (dashboard)
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+
+    // Should be redirected to login with redirect param
+    await expect(page).toHaveURL(/\/auth\/login\?redirect=/)
+
+    // STEP 3: Login
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/mot de passe|password/i).fill(testPassword)
+
+    await page.getByRole('button', { name: /se connecter|sign in|login/i }).click()
+
+    // Wait for redirect
+    await page.waitForTimeout(2000)
+
+    // STEP 4: Should be redirected to originally requested page (dashboard)
+    await expect(page).toHaveURL('/dashboard')
+
+    // Verify dashboard content is visible
+    await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible()
+  })
+
+  test('should redirect to default dashboard when no redirect param present after login', async ({
+    page,
+  }) => {
+    // Generate unique email for this test
+    const timestamp = Date.now()
+    const testEmail = `test.default.${timestamp}@example.com`
+    const testPassword = 'SecurePass123!'
+
+    // STEP 1: Register a new user
+    await page.goto('/auth/register')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByLabel(/^prénom|^first name/i).fill('Test')
+    await page.getByLabel(/^nom(?! de)|^last name/i).fill('User')
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/téléphone|phone/i).fill('+33 6 12 34 56 78')
+
+    const passwordFields = page.getByLabel(/mot de passe|password/i)
+    await passwordFields.first().fill(testPassword)
+    await passwordFields.last().fill(testPassword)
+
+    await page.getByRole('button', { name: /s'inscrire|sign up/i }).click()
+
+    // Wait for registration
+    await page.waitForTimeout(2000)
+
+    // STEP 2: Go directly to login page (no redirect param)
+    await page.goto('/auth/login')
+    await page.waitForLoadState('networkidle')
+
+    // STEP 3: Login
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/mot de passe|password/i).fill(testPassword)
+
+    await page.getByRole('button', { name: /se connecter|sign in|login/i }).click()
+
+    // Wait for redirect
+    await page.waitForTimeout(2000)
+
+    // STEP 4: Should be redirected to default dashboard
+    await expect(page).toHaveURL('/dashboard')
+  })
+
+  test('should allow authenticated user to access protected pages', async ({ page }) => {
+    // Generate unique email for this test
+    const timestamp = Date.now()
+    const testEmail = `test.access.${timestamp}@example.com`
+    const testPassword = 'SecurePass123!'
+
+    // STEP 1: Register and verify we can access dashboard
+    await page.goto('/auth/register')
+    await page.waitForLoadState('networkidle')
+
+    await page.getByLabel(/^prénom|^first name/i).fill('Test')
+    await page.getByLabel(/^nom(?! de)|^last name/i).fill('User')
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/téléphone|phone/i).fill('+33 6 12 34 56 78')
+
+    const passwordFields = page.getByLabel(/mot de passe|password/i)
+    await passwordFields.first().fill(testPassword)
+    await passwordFields.last().fill(testPassword)
+
+    await page.getByRole('button', { name: /s'inscrire|sign up/i }).click()
+    await page.waitForTimeout(2000)
+
+    // STEP 2: Login
+    await page.goto('/auth/login')
+    await page.getByLabel(/email/i).fill(testEmail)
+    await page.getByLabel(/mot de passe|password/i).fill(testPassword)
+    await page.getByRole('button', { name: /se connecter|sign in|login/i }).click()
+    await page.waitForTimeout(2000)
+
+    // STEP 3: Should be able to access dashboard directly
+    await page.goto('/dashboard')
+    await page.waitForLoadState('networkidle')
+
+    // Should stay on dashboard (not redirected to login)
+    await expect(page).toHaveURL('/dashboard')
+    await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible()
   })
 })

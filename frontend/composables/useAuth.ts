@@ -26,7 +26,10 @@ export function useAuth() {
       // Mise à jour du store
       authStore.setToken(response.token)
 
-      await router.push('/dashboard')
+      // Gérer la redirection après login
+      const route = useRoute()
+      const redirectPath = (route.query.redirect as string) || '/dashboard'
+      await router.push(redirectPath)
 
       // Toast de succès
       toast({
