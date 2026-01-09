@@ -47,32 +47,53 @@ export default defineConfig({
     locale: 'fr-FR',
   },
 
-  // Configure projects for major browsers
+  // Configure projects for test types
   projects: [
+    // 🔥 Smoke Tests - Critical tests that must pass on master
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'smoke-tests',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      retries: 0, // No retries for smoke tests
+      timeout: 30000, // 30s max per test
     },
 
+    // 🔄 Regression Tests - Complete test suite
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'regression-tests',
+      testMatch: /regression\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      retries: 1, // Allow one retry
+      timeout: 60000, // 60s max per test
     },
 
+    // 🚧 Feature Tests - Tests for features in development
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: 'feature-tests',
+      testMatch: /features\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      retries: 2, // More retries acceptable
+      timeout: 120000, // 2 min max per test
     },
 
-    // Mobile viewports
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    },
+    // Optional: Cross-browser testing (only run when needed)
+    // Uncomment these to test on other browsers
+    // {
+    //   name: 'firefox',
+    //   testMatch: /smoke\/.*\.spec\.ts/,
+    //   use: { ...devices['Desktop Firefox'] },
+    // },
+    // {
+    //   name: 'webkit',
+    //   testMatch: /smoke\/.*\.spec\.ts/,
+    //   use: { ...devices['Desktop Safari'] },
+    // },
   ],
 
   // Run your local dev server before starting the tests

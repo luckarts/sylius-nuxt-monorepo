@@ -22,9 +22,14 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
-    "test:e2e:chrome": "pnpm test:e2e:clean && playwright test --project=chromium",
-    "test:e2e:firefox": "pnpm test:e2e:clean && playwright test --project=firefox",
-    "test:e2e:webkit": "pnpm test:e2e:clean && playwright test --project=webkit"
+    "test:e2e:smoke": "pnpm test:e2e:clean && playwright test --project=smoke-tests",
+    "test:e2e:regression": "pnpm test:e2e:clean && playwright test --project=regression-tests",
+    "test:e2e:feature": "pnpm test:e2e:clean && playwright test --project=feature-tests",
+    "test:e2e:master": "pnpm test:e2e:clean && playwright test --project=smoke-tests --project=regression-tests",
+    "test:e2e:pr": "pnpm test:e2e:clean && playwright test --project=smoke-tests --project=feature-tests",
+    "test:e2e:tag:smoke": "pnpm test:e2e:clean && playwright test --grep @smoke",
+    "test:e2e:tag:critical": "pnpm test:e2e:clean && playwright test --grep @critical",
+    "test:e2e:tag:regression": "pnpm test:e2e:clean && playwright test --grep @regression"
   },
   "lint-staged": {
     "*.{js,ts,vue}": ["biome check --write", "biome format --write"]
