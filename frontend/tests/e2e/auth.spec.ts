@@ -532,4 +532,19 @@ test.describe('Authentication - Registration Flow', () => {
       expect(isLoginSuccessful).toBe(true)
     }
   })
+  /**
+   * Test 2: Middleware redirect basique
+   * Durée: ~10s
+   */
+  test('should redirect unauthenticated user to login', async ({ page }) => {
+    // Try to access protected page without auth
+    await page.goto('/dashboard')
+
+    // Should redirect to login
+    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 5000 })
+
+    // Check redirect parameter
+    const url = new URL(page.url())
+    expect(url.searchParams.get('redirect')).toBe('/dashboard')
+  })
 })
