@@ -49,7 +49,7 @@ export default defineConfig({
 
   // Configure projects for test types
   projects: [
-    // 🔥 Smoke Tests - Critical tests that must pass on master
+    // 🔥 Smoke Tests - Chromium (Default)
     {
       name: 'smoke-tests',
       testMatch: /smoke\/.*\.spec\.ts/,
@@ -58,6 +58,30 @@ export default defineConfig({
       },
       retries: 0, // No retries for smoke tests
       timeout: 30000, // 30s max per test
+    },
+
+    // 🔥 Smoke Tests - Firefox
+    {
+      name: 'smoke-tests-firefox',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Firefox'],
+        // Firefox peut être plus lent avec les composants Radix
+        actionTimeout: 15000, // 15s pour chaque action (au lieu de 10s par défaut)
+      },
+      retries: 0,
+      timeout: 45000, // 45s max per test (au lieu de 30s)
+    },
+
+    // 🔥 Smoke Tests - WebKit (Safari)
+    {
+      name: 'smoke-tests-webkit',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Safari'],
+      },
+      retries: 0,
+      timeout: 30000,
     },
 
     // 🔄 Regression Tests - Complete test suite
@@ -81,19 +105,6 @@ export default defineConfig({
       retries: 2, // More retries acceptable
       timeout: 120000, // 2 min max per test
     },
-
-    // Optional: Cross-browser testing (only run when needed)
-    // Uncomment these to test on other browsers
-    // {
-    //   name: 'firefox',
-    //   testMatch: /smoke\/.*\.spec\.ts/,
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   testMatch: /smoke\/.*\.spec\.ts/,
-    //   use: { ...devices['Desktop Safari'] },
-    // },
   ],
 
   // Run your local dev server before starting the tests

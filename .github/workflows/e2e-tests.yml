@@ -149,9 +149,9 @@ jobs:
 
           echo "✅ Sylius assets built successfully"
 
-      - name: Run Playwright E2E tests (Firefox only)
+      - name: Run Playwright E2E tests (Smoke tests - Firefox browser)
         run: |
-          echo "🎭 Running Playwright tests on Firefox..."
+          echo "🎭 Running Playwright smoke tests on Firefox..."
           docker compose -f docker-compose.e2e.yml --profile test-firefox up --exit-code-from playwright-firefox playwright-firefox
 
       - name: Copy test artifacts from container

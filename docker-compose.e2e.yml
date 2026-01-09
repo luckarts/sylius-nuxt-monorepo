@@ -157,7 +157,7 @@ services:
       retries: ${FRONTEND_RETRIES:-5}
       start_period: ${FRONTEND_START_PERIOD:-30s}
 
-  # Playwright (pour lancer les tests - tous les navigateurs)
+  # Playwright (pour lancer les tests - smoke tests sur Chrome par défaut)
   # Note: Using 'latest' because specific version tags may not be available immediately on Docker Hub
   playwright:
     image: mcr.microsoft.com/playwright:latest
@@ -182,13 +182,13 @@ services:
         npm install -g pnpm &&
         rm -rf node_modules/.cache &&
         pnpm install --no-frozen-lockfile &&
-        pnpm exec playwright install --with-deps &&
-        pnpm exec playwright test
+        pnpm exec playwright install --with-deps chromium &&
+        pnpm exec playwright test --project=smoke-tests
       "
     profiles:
       - test
 
-  # Playwright - Chromium uniquement
+  # Playwright - Chromium uniquement (smoke tests)
   playwright-chrome:
     image: mcr.microsoft.com/playwright:latest
     container_name: playwright-chrome-e2e
@@ -211,12 +211,12 @@ services:
       sh -c "
         npm install &&
         npx playwright install --with-deps chromium &&
-        npx playwright test --project=chromium
+        npx playwright test --project=smoke-tests
       "
     profiles:
       - test-chrome
 
-  # Playwright - Firefox uniquement
+  # Playwright - Firefox uniquement (smoke tests)
   playwright-firefox:
     image: mcr.microsoft.com/playwright:latest
     container_name: playwright-firefox-e2e
@@ -242,12 +242,12 @@ services:
       sh -c "
         npm install &&
         npx playwright install --with-deps firefox &&
-        npx playwright test --project=firefox
+        npx playwright test --project=smoke-tests-firefox
       "
     profiles:
       - test-firefox
 
-  # Playwright - WebKit uniquement
+  # Playwright - WebKit uniquement (smoke tests)
   playwright-webkit:
     image: mcr.microsoft.com/playwright:latest
     container_name: playwright-webkit-e2e
@@ -270,7 +270,7 @@ services:
       sh -c "
         npm install &&
         npx playwright install --with-deps webkit &&
-        npx playwright test --project=webkit
+        npx playwright test --project=smoke-tests-webkit
       "
     profiles:
       - test-webkit

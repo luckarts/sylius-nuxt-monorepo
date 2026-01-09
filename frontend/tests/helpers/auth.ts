@@ -36,7 +36,11 @@ export class AuthHelper {
     await this.page.goto('/auth/register')
     await this.page.waitForLoadState('networkidle')
 
-    await this.page.getByLabel(/^prénom|^first name/i).fill(credentials.firstName)
+    // Attendre explicitement que les champs soient interactifs (important pour Firefox)
+    const firstNameInput = this.page.getByLabel(/^prénom|^first name/i)
+    await firstNameInput.waitFor({ state: 'visible', timeout: 10000 })
+    await firstNameInput.fill(credentials.firstName)
+
     await this.page.getByLabel(/^nom(?! de)|^last name/i).fill(credentials.lastName)
     await this.page.getByLabel(/email/i).fill(credentials.email)
     await this.page.getByLabel(/téléphone|phone/i).fill(credentials.phoneNumber)
@@ -57,8 +61,14 @@ export class AuthHelper {
     await this.page.goto('/auth/login')
     await this.page.waitForLoadState('networkidle')
 
-    await this.page.getByLabel(/email/i).fill(credentials.email)
-    await this.page.getByLabel(/mot de passe|password/i).fill(credentials.password)
+    // Attendre explicitement que les champs soient interactifs (important pour Firefox)
+    const emailInput = this.page.getByLabel(/email/i)
+    await emailInput.waitFor({ state: 'visible', timeout: 10000 })
+    await emailInput.fill(credentials.email)
+
+    const passwordInput = this.page.getByLabel(/mot de passe|password/i)
+    await passwordInput.waitFor({ state: 'visible', timeout: 10000 })
+    await passwordInput.fill(credentials.password)
 
     await this.page.getByRole('button', { name: /se connecter|sign in|login/i }).click()
 
