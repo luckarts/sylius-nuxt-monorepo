@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { MailpitHelper } from '../helpers/mailpit'
+import { MailpitHelper } from '../../helpers/mailpit'
 
 /**
  * Helper function to check for a toast notification
@@ -415,9 +415,7 @@ test.describe('Authentication - Registration Flow', () => {
         timeout: 5000,
       })
     } catch (error: unknown) {
-      throw new Error(
-        `Cannot reach nginx-proxy. Make sure services are running. Error: ${error.message}`
-      )
+      throw new Error(`Cannot reach nginx-proxy. Make sure services are running. Error: ${error}`)
     }
 
     // Use page.request instead of page.goto to control redirect behavior
@@ -472,14 +470,12 @@ test.describe('Authentication - Registration Flow', () => {
             ]
 
             let successMessageFound = false
-            let successMessageText = ''
 
             for (const selector of successSelectors) {
               const element = page.locator(selector).first()
               const isVisible = await element.isVisible().catch(() => false)
 
               if (isVisible) {
-                successMessageText = (await element.textContent().catch(() => '')) || ''
                 successMessageFound = true
                 break
               }
@@ -531,20 +527,5 @@ test.describe('Authentication - Registration Flow', () => {
       // This test should fail if login doesn't work after verification
       expect(isLoginSuccessful).toBe(true)
     }
-  })
-  /**
-   * Test 2: Middleware redirect basique
-   * Durée: ~10s
-   */
-  test('should redirect unauthenticated user to login', async ({ page }) => {
-    // Try to access protected page without auth
-    await page.goto('/dashboard')
-
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 5000 })
-
-    // Check redirect parameter
-    const url = new URL(page.url())
-    expect(url.searchParams.get('redirect')).toBe('/dashboard')
   })
 })

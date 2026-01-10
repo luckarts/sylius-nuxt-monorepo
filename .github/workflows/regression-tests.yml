@@ -1,0 +1,272 @@
+name: Regression Tests (Full Suite)
+
+# 🔄 Workflow pour tests de régression complets
+# Objectif : Validation exhaustive (30-45 min)
+# - Lancé manuellement via workflow_dispatch
+# - Automatique : Tous les dimanches à 2h du matin (hebdomadaire)
+
+on:
+  workflow_dispatch: # Lancement manuel depuis GitHub Actions UI
+    inputs:
+      branch:
+        description: 'Branch to test'
+        required: false
+        default: 'main'
+        type: string
+
+  # ✅ Cron hebdomadaire : Tous les dimanches à 2h du matin
+  schedule:
+    - cron: '0 2 * * 0'  # Dimanche 2h (UTC)
+
+jobs:
+  check-changes:
+    name: Check if main has changed
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      commits_count: ${{ steps.check.outputs.commits_count }}
+      last_commit: ${{ steps.check.outputs.last_commit }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Récupérer tout l'historique
+
+      - name: Check for changes in last 7 days
+        id: check
+        run: |
+          # Compter les commits sur main dans les 7 derniers jours
+          COMMITS_COUNT=$(git log --oneline --since="7 days ago" origin/main | wc -l)
+          LAST_COMMIT=$(git log -1 --format="%h - %s (%cr)" origin/main)
+
+          echo "commits_count=$COMMITS_COUNT" >> $GITHUB_OUTPUT
+          echo "last_commit=$LAST_COMMIT" >> $GITHUB_OUTPUT
+
+          if [ "$COMMITS_COUNT" -gt 0 ]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "✅ Main a changé : $COMMITS_COUNT commit(s) dans les 7 derniers jours"
+            echo "📝 Dernier commit : $LAST_COMMIT"
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Main inchangé depuis 7 jours - Skip regression tests"
+          fi
+
+  quality-checks:
+    name: Code Quality & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Linting
+        working-directory: frontend
+        run: pnpm run lint
+
+      - name: 🔍 TypeScript
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: 🏗️ Build
+        working-directory: frontend
+        run: pnpm run build
+
+  regression-full-suite:
+    name: Regression Tests (All Tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [check-changes, quality-checks]
+    if: needs.check-changes.outputs.should_run == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-regression-${{ hashFiles('**/Dockerfile*') }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Create required directories
+        run: |
+          mkdir -p frontend/playwright-report frontend/test-results
+          chmod -R 777 frontend/playwright-report frontend/test-results
+
+      - name: Setup CI environment
+        run: cp .env.e2e.ci .env
+
+      - name: Build Docker images
+        run: |
+          echo "🏗️ Building Docker images for regression tests..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci build
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Start E2E environment
+        run: |
+          echo "🚀 Starting all services..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci up -d
+
+      - name: Wait for services
+        run: |
+          echo "⏳ Waiting for services to be healthy..."
+
+          # PostgreSQL
+          timeout 60 bash -c 'until docker compose -f docker-compose.e2e.yml exec -T postgres pg_isready -U sylius -d sylius_e2e; do sleep 2; done'
+          echo "✅ PostgreSQL ready"
+
+          # Mailpit
+          timeout 60 bash -c 'until curl -f http://localhost:8025/api/v1/info 2>/dev/null; do sleep 2; done'
+          echo "✅ Mailpit ready"
+
+          # Sylius API
+          echo "⏳ Waiting for Sylius API (may take 3-5 minutes for fixtures)..."
+          timeout 600 bash -c 'until curl -f http://localhost:8000/api/v2/shop/products 2>/dev/null; do sleep 15; done'
+          echo "✅ Sylius ready"
+
+          # Nuxt
+          timeout 120 bash -c 'while [ "$(docker inspect -f {{.State.Health.Status}} nuxt-frontend-e2e 2>/dev/null || echo "starting")" != "healthy" ]; do sleep 5; done'
+          echo "✅ Nuxt ready"
+
+          echo "🎉 All services healthy!"
+
+      - name: Build Sylius assets
+        run: |
+          echo "🎨 Building Sylius assets..."
+          docker compose -f docker-compose.e2e.yml exec -T php sh -c "
+            cd /srv/sylius && \
+            npm install --no-progress --legacy-peer-deps && \
+            npm run build:prod && \
+            php bin/console cache:clear
+          "
+
+      - name: Display services status
+        run: |
+          echo "📊 Services ready for regression tests:"
+          docker compose -f docker-compose.e2e.yml ps
+          echo ""
+          echo "🌐 Services URLs:"
+          echo "  📱 Nuxt:   http://localhost:3000"
+          echo "  🔧 Sylius: http://localhost:8000"
+          echo "  📧 Mailpit: http://localhost:8025"
+
+      # 🔄 Tests de régression complets (tous les tests)
+      - name: Run Full Regression Test Suite
+        run: |
+          echo "🔄 Running COMPLETE regression test suite..."
+          echo "This includes ALL tests: smoke, regression, and edge cases"
+          docker compose -f docker-compose.e2e.yml --profile test-regression up --exit-code-from playwright-regression playwright-regression
+
+      - name: Copy test artifacts
+        if: always()
+        run: |
+          mkdir -p frontend/playwright-report frontend/test-results
+          docker cp playwright-regression-e2e:/app/playwright-report/. frontend/playwright-report/ 2>/dev/null || true
+          docker cp playwright-regression-e2e:/app/test-results/. frontend/test-results/ 2>/dev/null || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-full-test-results
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 30
+
+      - name: Display logs on failure
+        if: failure()
+        run: |
+          echo "🔍 Debugging logs for regression tests..."
+          echo "=== Sylius logs ==="
+          docker compose -f docker-compose.e2e.yml logs sylius --tail=100
+          echo "=== Nuxt logs ==="
+          docker compose -f docker-compose.e2e.yml logs nuxt --tail=100
+          echo "=== Playwright Regression logs ==="
+          docker compose -f docker-compose.e2e.yml logs playwright-regression --tail=200
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "🧹 Cleaning up..."
+          docker compose -f docker-compose.e2e.yml down -v
+
+  summary:
+    name: Regression Test Summary
+    runs-on: ubuntu-latest
+    needs: [check-changes, quality-checks, regression-full-suite]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# 🔄 Regression Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run type**: Full regression suite" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Schedule**: Every Sunday at 2:00 AM UTC (conditional)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Vérifier si le workflow a été skippé
+          if [ "${{ needs.check-changes.outputs.should_run }}" != "true" ]; then
+            echo "⏭️ **Workflow Skipped**: No changes on main in last 7 days" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Commits in last 7 days**: ${{ needs.check-changes.outputs.commits_count }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Last commit**: ${{ needs.check-changes.outputs.last_commit }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Note**: Regression tests are skipped if main hasn't changed in 7 days to save CI/CD costs." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          # Afficher les résultats des tests
+          echo "**Commits in last 7 days**: ${{ needs.check-changes.outputs.commits_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Last commit**: ${{ needs.check-changes.outputs.last_commit }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quality-checks.result }}" == "success" ]; then
+            echo "✅ **Quality Checks**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Quality Checks**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.regression-full-suite.result }}" == "success" ]; then
+            echo "✅ **Regression Tests (Full Suite)**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Regression Tests (Full Suite)**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quality-checks.result }}" == "success" ] && \
+             [ "${{ needs.regression-full-suite.result }}" == "success" ]; then
+            echo "🎉 **All regression tests passed!** System is production-ready." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          else
+            echo "⚠️ **Some regression tests failed.** Please review before release." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

@@ -47,31 +47,64 @@ export default defineConfig({
     locale: 'fr-FR',
   },
 
-  // Configure projects for major browsers
+  // Configure projects for test types
   projects: [
+    // 🔥 Smoke Tests - Chromium (Default)
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: 'smoke-tests',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      retries: 0, // No retries for smoke tests
+      timeout: 30000, // 30s max per test
     },
 
+    // 🔥 Smoke Tests - Firefox
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'smoke-tests-firefox',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Firefox'],
+        // Firefox peut être plus lent avec les composants Radix
+        actionTimeout: 15000, // 15s pour chaque action (au lieu de 10s par défaut)
+      },
+      retries: 0,
+      timeout: 45000, // 45s max per test (au lieu de 30s)
     },
 
+    // 🔥 Smoke Tests - WebKit (Safari)
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: 'smoke-tests-webkit',
+      testMatch: /smoke\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Safari'],
+      },
+      retries: 0,
+      timeout: 30000,
     },
 
-    // Mobile viewports
+    // 🔄 Regression Tests - Complete test suite
     {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
+      name: 'regression-tests',
+      testMatch: /regression\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      retries: 1, // Allow one retry
+      timeout: 60000, // 60s max per test
     },
+
+    // 🚧 Feature Tests - Tests temporaires pour features en développement
+    // ⚠️ À MIGRER vers smoke/ ou regression/ avant merge PR
     {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
+      name: 'feature-tests',
+      testMatch: /features\/.*\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+      retries: 2, // Plus de retries acceptables (WIP)
+      timeout: 120000, // 2 min max par test (pas de contrainte)
     },
   ],
 

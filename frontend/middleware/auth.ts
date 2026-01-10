@@ -7,7 +7,7 @@
  *   middleware: 'auth'
  * })
  */
-export default defineNuxtRouteMiddleware((to, from) => {
+export default defineNuxtRouteMiddleware((to) => {
   const authStore = useAuthStore()
 
   // Vérifier si l'utilisateur est authentifié
