@@ -1,0 +1,209 @@
+name: Quality Gate (Dev & Main)
+
+# 🎯 Workflow SMOKE TESTS pour PRs vers dev et main
+# Objectif : Validation rapide mais complète (11-17 min max)
+# - Quality checks (lint, typecheck, build)
+# - E2E smoke tests (chromium uniquement, tests critiques)
+#
+# Pour tests complets (regression) : voir regression-tests.yml (cron hebdomadaire)
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - develop
+      - main
+
+jobs:
+  quality-checks:
+    name: Code Quality & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Linting
+        working-directory: frontend
+        run: pnpm run lint
+
+      - name: 🔍 TypeScript
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: 🏗️ Build
+        working-directory: frontend
+        run: pnpm run build
+
+      # Décommenter si vous avez des tests unitaires
+      # - name: 🧪 Unit tests
+      #   working-directory: frontend
+      #   run: pnpm run test:unit
+
+  smoke-tests:
+    name: E2E Smoke Tests (Critical Flows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: quality-checks # Attend que les quality checks passent
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ hashFiles('**/Dockerfile*') }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Create required directories
+        run: |
+          mkdir -p frontend/playwright-report
+          mkdir -p frontend/test-results
+          chmod -R 777 frontend/playwright-report frontend/test-results
+
+      - name: Setup CI environment
+        run: cp .env.e2e.ci .env
+
+      - name: Build Docker images
+        run: |
+          echo "🏗️ Building Docker images..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci build --build-arg BUILDKIT_INLINE_CACHE=1
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+
+      - name: Start E2E environment
+        run: |
+          echo "🚀 Starting services..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci up -d
+
+      - name: Wait for services
+        run: |
+          echo "⏳ Waiting for services..."
+
+          # PostgreSQL
+          timeout 60 bash -c 'until docker compose -f docker-compose.e2e.yml exec -T postgres pg_isready -U sylius -d sylius_e2e; do sleep 2; done'
+          echo "✅ PostgreSQL ready"
+
+          # Mailpit
+          timeout 60 bash -c 'until curl -f http://localhost:8025/api/v1/info 2>/dev/null; do sleep 2; done'
+          echo "✅ Mailpit ready"
+
+          # Sylius API (timeout 10 min)
+          timeout 600 bash -c 'until curl -f http://localhost:8000/api/v2/shop/products 2>/dev/null; do sleep 15; done'
+          echo "✅ Sylius ready"
+
+          # Nuxt
+          timeout 120 bash -c 'while [ "$(docker inspect -f {{.State.Health.Status}} nuxt-frontend-e2e 2>/dev/null || echo "starting")" != "healthy" ]; do sleep 5; done'
+          echo "✅ Nuxt ready"
+
+      - name: Build Sylius assets
+        run: |
+          docker compose -f docker-compose.e2e.yml exec -T php sh -c "
+            cd /srv/sylius && \
+            npm install --no-progress --legacy-peer-deps && \
+            npm run build:prod && \
+            php bin/console cache:clear
+          "
+
+      # 🎯 SEULEMENT les tests smoke (Chromium uniquement pour les PRs)
+      - name: Run E2E Smoke Tests (Chromium only)
+        run: |
+          echo "🎭 Running smoke tests (chromium only, ~3-5 min)..."
+          # Utilise le profile test-chrome qui lance smoke-tests sur chromium
+          docker compose -f docker-compose.e2e.yml --profile test-chrome up --exit-code-from playwright-chrome playwright-chrome
+
+      - name: Copy test artifacts
+        if: always()
+        run: |
+          mkdir -p frontend/playwright-report frontend/test-results
+          docker cp playwright-chrome-e2e:/app/playwright-report/. frontend/playwright-report/ 2>/dev/null || true
+          docker cp playwright-chrome-e2e:/app/test-results/. frontend/test-results/ 2>/dev/null || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results-${{ github.base_ref }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 30
+
+      - name: Display logs on failure
+        if: failure()
+        run: |
+          echo "🔍 Logs for debugging..."
+          docker compose -f docker-compose.e2e.yml logs sylius --tail=100
+          docker compose -f docker-compose.e2e.yml logs nuxt --tail=100
+          docker compose -f docker-compose.e2e.yml logs playwright-chrome --tail=200
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v
+
+  summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [quality-checks, smoke-tests]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          # Déterminer la branche cible
+          TARGET_BRANCH="${{ github.base_ref }}"
+
+          echo "# 📊 Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Branch**: \`$TARGET_BRANCH\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quality-checks.result }}" == "success" ]; then
+            echo "✅ **Quality Checks**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Quality Checks**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.smoke-tests.result }}" == "success" ]; then
+            echo "✅ **E2E Smoke Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **E2E Smoke Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.quality-checks.result }}" == "success" ] && [ "${{ needs.smoke-tests.result }}" == "success" ]; then
+            echo "🎉 **All checks passed!** Ready to merge to \`$TARGET_BRANCH\`" >> $GITHUB_STEP_SUMMARY
+
+            # Note pour main
+            if [ "$TARGET_BRANCH" == "main" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "💡 **Note**: Full regression tests run weekly via cron (see \`regression-tests.yml\`)" >> $GITHUB_STEP_SUMMARY
+            fi
+            exit 0
+          else
+            echo "❌ **Some checks failed.** Please fix before merging." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

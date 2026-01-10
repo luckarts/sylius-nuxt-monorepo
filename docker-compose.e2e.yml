@@ -157,7 +157,7 @@ services:
       retries: ${FRONTEND_RETRIES:-5}
       start_period: ${FRONTEND_START_PERIOD:-30s}
 
-  # Playwright (pour lancer les tests - tous les navigateurs)
+  # Playwright (pour lancer les tests - smoke tests sur Chrome par défaut)
   # Note: Using 'latest' because specific version tags may not be available immediately on Docker Hub
   playwright:
     image: mcr.microsoft.com/playwright:latest
@@ -172,23 +172,28 @@ services:
       MAILPIT_URL: "http://mailpit:8025"
       CI: "true"
     volumes:
+      # Monte tout le frontend
       - ./frontend:/app
-      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
+      # Mais exclut node_modules avec un volume anonyme
+      - /app/node_modules
+      # Volume pour les résultats de tests
+      - ./frontend/test-results:/app/test-results
+      - ./frontend/playwright-report:/app/playwright-report
     working_dir: /app
     networks:
       - sylius-e2e-network
     command: >
       sh -c "
         npm install -g pnpm &&
-        rm -rf node_modules/.cache &&
-        pnpm install --no-frozen-lockfile &&
-        pnpm exec playwright install --with-deps &&
-        pnpm exec playwright test
+        rm -rf node_modules/.cache package-lock.json &&
+        pnpm install --no-frozen-lockfile --force &&
+        pnpm exec playwright install --with-deps chromium &&
+        pnpm exec playwright test --project=smoke-tests
       "
     profiles:
       - test
 
-  # Playwright - Chromium uniquement
+  # Playwright - Chromium uniquement (smoke tests)
   playwright-chrome:
     image: mcr.microsoft.com/playwright:latest
     container_name: playwright-chrome-e2e
@@ -202,21 +207,27 @@ services:
       MAILPIT_URL: "http://mailpit:8025"
       CI: "true"
     volumes:
+      # Monte tout le frontend
       - ./frontend:/app
-      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
+      # Mais exclut node_modules avec un volume anonyme
+      - /app/node_modules
+      - ./frontend/test-results:/app/test-results
+      - ./frontend/playwright-report:/app/playwright-report
     working_dir: /app
     networks:
       - sylius-e2e-network
     command: >
       sh -c "
-        npm install &&
-        npx playwright install --with-deps chromium &&
-        npx playwright test --project=chromium
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache package-lock.json &&
+        pnpm install --no-frozen-lockfile --force &&
+        pnpm exec playwright install --with-deps chromium &&
+        pnpm exec playwright test --project=smoke-tests
       "
     profiles:
       - test-chrome
 
-  # Playwright - Firefox uniquement
+  # Playwright - Firefox uniquement (smoke tests)
   playwright-firefox:
     image: mcr.microsoft.com/playwright:latest
     container_name: playwright-firefox-e2e
@@ -233,21 +244,27 @@ services:
       POSTGRES_USER: "sylius"
       POSTGRES_PASSWORD: "sylius_password"
     volumes:
+      # Monte tout le frontend
       - ./frontend:/app
-      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
+      # Mais exclut node_modules avec un volume anonyme
+      - /app/node_modules
+      - ./frontend/test-results:/app/test-results
+      - ./frontend/playwright-report:/app/playwright-report
     working_dir: /app
     networks:
       - sylius-e2e-network
     command: >
       sh -c "
-        npm install &&
-        npx playwright install --with-deps firefox &&
-        npx playwright test --project=firefox
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache package-lock.json &&
+        pnpm install --no-frozen-lockfile --force &&
+        pnpm exec playwright install --with-deps firefox &&
+        pnpm exec playwright test --project=smoke-tests-firefox
       "
     profiles:
       - test-firefox
 
-  # Playwright - WebKit uniquement
+  # Playwright - WebKit uniquement (smoke tests)
   playwright-webkit:
     image: mcr.microsoft.com/playwright:latest
     container_name: playwright-webkit-e2e
@@ -261,19 +278,57 @@ services:
       MAILPIT_URL: "http://mailpit:8025"
       CI: "true"
     volumes:
+      # Monte tout le frontend
       - ./frontend:/app
-      # Pas de volume pour node_modules - Playwright réinstalle tout à chaque run
+      # Mais exclut node_modules avec un volume anonyme
+      - /app/node_modules
+      - ./frontend/test-results:/app/test-results
+      - ./frontend/playwright-report:/app/playwright-report
     working_dir: /app
     networks:
       - sylius-e2e-network
     command: >
       sh -c "
-        npm install &&
-        npx playwright install --with-deps webkit &&
-        npx playwright test --project=webkit
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache package-lock.json &&
+        pnpm install --no-frozen-lockfile --force &&
+        pnpm exec playwright install --with-deps webkit &&
+        pnpm exec playwright test --project=smoke-tests-webkit
       "
     profiles:
       - test-webkit
+
+  # 🔄 Playwright - Regression Tests (Chromium - Suite complète)
+  playwright-regression:
+    image: mcr.microsoft.com/playwright:latest
+    container_name: playwright-regression-e2e
+    depends_on:
+      nuxt:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      BASE_URL: "http://nuxt:3000"
+      MAILPIT_URL: "http://mailpit:8025"
+      CI: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - ./frontend/test-results:/app/test-results
+      - ./frontend/playwright-report:/app/playwright-report
+    working_dir: /app
+    networks:
+      - sylius-e2e-network
+    command: >
+      sh -c "
+        npm install -g pnpm &&
+        rm -rf node_modules/.cache package-lock.json &&
+        pnpm install --no-frozen-lockfile --force &&
+        pnpm exec playwright install --with-deps chromium &&
+        pnpm exec playwright test --project=regression-tests
+      "
+    profiles:
+      - test-regression
 
 volumes:
   mailpit_data:

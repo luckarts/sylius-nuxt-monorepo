@@ -1,0 +1,202 @@
+name: Feature Branch Checks
+
+# 🎯 Workflow optimisé pour les pushs sur feature/**
+# Objectif : Feedback rapide et fiable sur la qualité du code
+# Architecture : Fail fast avec quality checks avant Docker
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+jobs:
+  quick-quality:
+    name: Code Quality & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Linting
+        working-directory: frontend
+        run: pnpm run lint
+
+      - name: 🔍 TypeScript
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: 🏗️ Build
+        working-directory: frontend
+        run: pnpm run build
+
+      # Décommenter si vous avez des tests unitaires
+      # - name: 🧪 Unit tests
+      #   working-directory: frontend
+      #   run: pnpm run test:unit
+
+  feature-tests:
+    name: E2E Feature Tests (Firefox)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: quick-quality  # ⭐ Lance seulement si quality checks passent
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ hashFiles('**/Dockerfile*') }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Create required directories
+        run: |
+          mkdir -p frontend/playwright-report
+          mkdir -p frontend/test-results
+          chmod -R 777 frontend/playwright-report frontend/test-results
+
+      - name: Setup CI environment
+        run: cp .env.e2e.ci .env
+
+      - name: Build Docker images
+        run: |
+          echo "🏗️ Building Docker images..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci build --build-arg BUILDKIT_INLINE_CACHE=1
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+
+      - name: Start E2E environment
+        run: |
+          echo "🚀 Starting services..."
+          docker compose -f docker-compose.e2e.yml --env-file .env.e2e.ci up -d
+
+      - name: Wait for services
+        run: |
+          echo "⏳ Waiting for services..."
+
+          # PostgreSQL
+          timeout 60 bash -c 'until docker compose -f docker-compose.e2e.yml exec -T postgres pg_isready -U sylius -d sylius_e2e; do sleep 2; done'
+          echo "✅ PostgreSQL ready"
+
+          # Mailpit
+          timeout 60 bash -c 'until curl -f http://localhost:8025/api/v1/info 2>/dev/null; do sleep 2; done'
+          echo "✅ Mailpit ready"
+
+          # Sylius API (timeout 10 min pour fixtures)
+          echo "⏳ Waiting for Sylius API (fixtures loading may take 3-5 minutes)..."
+          timeout 600 bash -c 'until curl -f http://localhost:8000/api/v2/shop/products 2>/dev/null; do sleep 15; done' || {
+            echo "❌ Timeout waiting for Sylius API"
+            echo "🔍 Last 100 lines of PHP logs:"
+            docker compose -f docker-compose.e2e.yml logs php --tail=100
+            exit 1
+          }
+          echo "✅ Sylius ready"
+
+          # Nuxt (healthcheck Docker)
+          timeout 120 bash -c 'while [ "$(docker inspect -f {{.State.Health.Status}} nuxt-frontend-e2e 2>/dev/null || echo "starting")" != "healthy" ]; do sleep 5; done' || {
+            echo "❌ Timeout: Nuxt did not become healthy"
+            docker compose -f docker-compose.e2e.yml logs nuxt --tail=100
+            exit 1
+          }
+          echo "✅ Nuxt ready"
+
+          echo "🎉 All services are healthy!"
+
+      - name: Build Sylius assets
+        run: |
+          echo "🎨 Building Sylius frontend assets..."
+          docker compose -f docker-compose.e2e.yml exec -T php sh -c "
+            cd /srv/sylius && \
+            npm install --no-progress --legacy-peer-deps && \
+            npm run build:prod && \
+            php bin/console cache:clear
+          " || {
+            echo "❌ Failed to build Sylius assets"
+            docker compose -f docker-compose.e2e.yml logs php --tail=50
+            exit 1
+          }
+          echo "✅ Sylius assets built successfully"
+
+      # 🎯 Tests E2E sur Firefox (plus de couverture que Chromium)
+      - name: Run E2E Feature Tests (Firefox)
+        run: |
+          echo "🎭 Running feature tests on Firefox..."
+          # Utilise le profile test-firefox
+          docker compose -f docker-compose.e2e.yml --profile test-firefox up --exit-code-from playwright-firefox playwright-firefox
+
+      - name: Copy test artifacts
+        if: always()
+        run: |
+          mkdir -p frontend/playwright-report frontend/test-results
+          docker cp playwright-firefox-e2e:/app/playwright-report/. frontend/playwright-report/ 2>/dev/null || true
+          docker cp playwright-firefox-e2e:/app/test-results/. frontend/test-results/ 2>/dev/null || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feature-test-results
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 30
+
+      - name: Display logs on failure
+        if: failure()
+        run: |
+          echo "🔍 Logs for debugging..."
+          docker compose -f docker-compose.e2e.yml logs sylius --tail=100
+          docker compose -f docker-compose.e2e.yml logs nuxt --tail=100
+          docker compose -f docker-compose.e2e.yml logs playwright-firefox --tail=200
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "🧹 Cleaning up..."
+          docker compose -f docker-compose.e2e.yml down -v
+          echo "✅ Cleanup complete"
+
+  summary:
+    name: Feature Check Summary
+    runs-on: ubuntu-latest
+    needs: [quick-quality, feature-tests]
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.quick-quality.result }}" == "success" ] && [ "${{ needs.feature-tests.result }}" == "success" ]; then
+            echo "✅ All checks passed! Feature is ready for PR"
+          else
+            echo "❌ Some checks failed. Please fix before creating PR."
+            if [ "${{ needs.quick-quality.result }}" != "success" ]; then
+              echo "  - Quality checks failed (lint/typecheck/build)"
+            fi
+            if [ "${{ needs.feature-tests.result }}" != "success" ]; then
+              echo "  - E2E tests failed"
+            fi
+            exit 1
+          fi
